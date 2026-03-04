@@ -1,5 +1,6 @@
 import { TrailsApp } from "@/components/trails-app"
 
-export default function HomePage() {
+export default function TrailPage() {
   return <TrailsApp />
 }
+
