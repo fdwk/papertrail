@@ -42,7 +42,6 @@
     "@vercel/analytics": "1.6.1",
     "@xyflow/react": "^12.6.0",
     "autoprefixer": "^10.4.20",
-    "caddy": "^0.0.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
