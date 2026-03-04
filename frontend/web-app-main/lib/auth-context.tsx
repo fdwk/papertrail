@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { apiFetch } from "@/lib/api-client"
+import { backendFetch } from "@/lib/api-client"
 
 export interface AuthUser {
   email: string
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await apiFetch<{ token?: string; message?: string }>("/login", {
+    const res = await backendFetch<{ token?: string; detail?: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     })
@@ -65,11 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { ok: true }
     }
 
-    return { ok: false, error: res.data.message ?? "Login failed. Please try again." }
+    const msg = (res.data as { detail?: string }).detail
+    return { ok: false, error: msg ?? "Login failed. Please try again." }
   }, [])
 
   const signup = useCallback(async (email: string, password: string) => {
-    const res = await apiFetch<{ token?: string; message?: string }>("/signup", {
+    const res = await backendFetch<{ token?: string; detail?: string }>("/auth/signup", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     })
@@ -81,7 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { ok: true }
     }
 
-    return { ok: false, error: res.data.message ?? "Signup failed. Please try again." }
+    const msg = (res.data as { detail?: string }).detail
+    return { ok: false, error: msg ?? "Signup failed. Please try again." }
   }, [])
 
   const logout = useCallback(() => {

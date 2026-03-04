@@ -22,3 +22,12 @@ export interface Trail {
   createdAt: string
   nodes: DAGNode[]
 }
+
+/** Lightweight trail for list (no nodes). From GET /trails. */
+export interface TrailSummary {
+  id: string
+  topic: string
+  createdAt: string
+  readCount?: number
+  totalCount?: number
+}

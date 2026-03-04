@@ -13,12 +13,20 @@ interface TrailSidebarProps {
   activeTrailId: string | null
   onSelectTrail: (id: string) => void
   onNewTrail: () => void
+  trailsLoading?: boolean
 }
 
 function getTrailProgress(trail: Trail): number {
-  if (trail.nodes.length === 0) return 0
-  const readCount = trail.nodes.filter((n) => n.paper.isRead).length
-  return Math.round((readCount / trail.nodes.length) * 100)
+  const total = trail.nodes.length
+  if (total > 0) {
+    const readCount = trail.nodes.filter((n) => n.paper.isRead).length
+    return Math.round((readCount / total) * 100)
+  }
+  const summary = trail as Trail & { readCount?: number; totalCount?: number }
+  const r = summary.readCount ?? 0
+  const t = summary.totalCount ?? 0
+  if (t === 0) return 0
+  return Math.round((r / t) * 100)
 }
 
 export function TrailSidebar({
@@ -26,6 +34,7 @@ export function TrailSidebar({
   activeTrailId,
   onSelectTrail,
   onNewTrail,
+  trailsLoading = false,
 }: TrailSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -91,6 +100,9 @@ export function TrailSidebar({
           <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
             Your Trails
           </p>
+          {trailsLoading ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">Loading trails…</p>
+          ) : (
           <ul className="flex flex-col gap-0.5">
             {trails.map((trail) => {
               const progress = getTrailProgress(trail)
@@ -135,6 +147,7 @@ export function TrailSidebar({
               )
             })}
           </ul>
+          )}
         </nav>
 
         {/* Footer */}
