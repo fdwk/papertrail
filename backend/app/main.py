@@ -6,6 +6,6 @@ app = FastAPI()
 def read_root():
     return {"message": "Hello from backend"}
 
-@app.get("/pook")
-def read_root():
+@app.get("/poo/")
+def read_poo():
     return {"message": "Pee poo"}

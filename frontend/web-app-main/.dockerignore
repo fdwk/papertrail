@@ -1,0 +1,17 @@
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+
+# Next.js build outputs
+.next
+out
+
+# Git
+.git
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
