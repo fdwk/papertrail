@@ -1,8 +1,10 @@
+alembic==1.18.4
 fastapi==0.111.0
 h2==4.3.0
 hpack==4.1.0
 Hypercorn==0.18.0
 hyperframe==6.1.0
+Mako==1.3.10
 orjson==3.11.7
 priority==2.0.0
 psycopg2-binary==2.9.7

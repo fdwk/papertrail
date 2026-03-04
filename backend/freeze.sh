@@ -1,1 +1,1 @@
-pip freeze | findstr /v "@" > requirements.txt
+pip freeze | grep -v "@" > requirements.txt

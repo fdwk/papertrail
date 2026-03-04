@@ -6,10 +6,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["hypercorn", "app.main:app", "--bind", "::"]
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
