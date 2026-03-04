@@ -27,13 +27,20 @@ import { BookOpen } from "lucide-react"
 interface DAGCanvasProps {
   trail: Trail
   onToggleRead: (nodeId: string) => void
+  onToggleStar: (nodeId: string) => void
+  onSaveNote: (nodeId: string, note: string) => void
 }
 
 const nodeTypes: NodeTypes = {
   paperNode: PaperNode,
 }
 
-function DAGCanvasInner({ trail, onToggleRead }: DAGCanvasProps) {
+function DAGCanvasInner({
+  trail,
+  onToggleRead,
+  onToggleStar,
+  onSaveNote,
+}: DAGCanvasProps) {
   const { fitView } = useReactFlow()
   const { resolvedTheme } = useTheme()
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -84,19 +91,22 @@ function DAGCanvasInner({ trail, onToggleRead }: DAGCanvasProps) {
     return () => clearTimeout(t)
   }, [trail.id, fitView])
 
-  // Theme-aware edge styling
+  // Theme-aware edge styling (curved edges with directed arrows)
   const styledEdges = useMemo(() => {
     const readNodes = new Set(
       trail.nodes.filter((n) => n.paper.isRead).map((n) => n.id)
     )
     return edges.map((edge) => {
       const bothRead = readNodes.has(edge.source) && readNodes.has(edge.target)
+      const stroke = bothRead
+        ? `var(--edge-active)`
+        : `var(--edge-default)`
       return {
         ...edge,
+        type: "default",
+        markerEnd: { type: "arrowclosed" as const, color: stroke },
         style: {
-          stroke: bothRead
-            ? `var(--edge-active)`
-            : `var(--edge-default)`,
+          stroke,
           strokeWidth: bothRead ? 2.5 : 1.5,
         },
         animated: bothRead,
@@ -194,6 +204,8 @@ function DAGCanvasInner({ trail, onToggleRead }: DAGCanvasProps) {
             node={selectedDAGNode}
             onClose={handleClosePanel}
             onToggleRead={onToggleRead}
+            onToggleStar={onToggleStar}
+            onSaveNote={onSaveNote}
           />
         )}
       </div>

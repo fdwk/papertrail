@@ -6,6 +6,8 @@ export interface Paper {
   abstract: string
   url: string
   isRead: boolean
+  isStarred?: boolean
+  note?: string
 }
 
 export interface DAGNode {

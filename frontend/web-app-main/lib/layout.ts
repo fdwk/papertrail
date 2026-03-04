@@ -10,10 +10,11 @@ export function getLayoutedElements(dagNodes: DAGNode[]) {
   g.setDefaultEdgeLabel(() => ({}))
   g.setGraph({
     rankdir: "TB",
-    nodesep: 60,
-    ranksep: 100,
-    marginx: 40,
-    marginy: 40,
+    nodesep: 80,
+    ranksep: 140,
+    edgesep: 50,
+    marginx: 50,
+    marginy: 50,
   })
 
   // Add nodes
@@ -29,8 +30,9 @@ export function getLayoutedElements(dagNodes: DAGNode[]) {
         id: `e-${depId}-${dagNode.id}`,
         source: depId,
         target: dagNode.id,
-        type: "smoothstep",
+        type: "default",
         animated: false,
+        markerEnd: { type: "arrowclosed" },
       })
     }
   }

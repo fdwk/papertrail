@@ -25,6 +25,8 @@ function generateNewTrailData(topic: string): Trail {
           abstract: `This comprehensive survey covers the foundational concepts, recent advancements, and future directions in ${topic}. We review key methodologies and their applications across multiple domains.`,
           url: "https://arxiv.org",
           isRead: false,
+          isStarred: false,
+          note: "",
         },
         dependencies: [],
       },
@@ -38,6 +40,8 @@ function generateNewTrailData(topic: string): Trail {
           abstract: `We establish the theoretical underpinnings that make ${topic} possible. This work provides essential background for understanding more advanced techniques in the field.`,
           url: "https://arxiv.org",
           isRead: false,
+          isStarred: false,
+          note: "",
         },
         dependencies: [`${id}-n1`],
       },
@@ -51,6 +55,8 @@ function generateNewTrailData(topic: string): Trail {
           abstract: `Building on foundational work, this paper introduces novel methods for ${topic} that significantly improve upon existing approaches in terms of both efficiency and accuracy.`,
           url: "https://arxiv.org",
           isRead: false,
+          isStarred: false,
+          note: "",
         },
         dependencies: [`${id}-n1`],
       },
@@ -64,6 +70,8 @@ function generateNewTrailData(topic: string): Trail {
           abstract: `We demonstrate how recent advances in ${topic} can be scaled to address real-world challenges. Our approach combines insights from both theoretical foundations and practical innovations.`,
           url: "https://arxiv.org",
           isRead: false,
+          isStarred: false,
+          note: "",
         },
         dependencies: [`${id}-n2`, `${id}-n3`],
       },
@@ -132,6 +140,38 @@ export function TrailsApp() {
     )
   }, [])
 
+  const handleToggleStar = useCallback((nodeId: string) => {
+    setTrails((prev) =>
+      prev.map((trail) => ({
+        ...trail,
+        nodes: trail.nodes.map((node) =>
+          node.id === nodeId
+            ? {
+                ...node,
+                paper: {
+                  ...node.paper,
+                  isStarred: !(node.paper.isStarred ?? false),
+                },
+              }
+            : node
+        ),
+      }))
+    )
+  }, [])
+
+  const handleSaveNote = useCallback((nodeId: string, note: string) => {
+    setTrails((prev) =>
+      prev.map((trail) => ({
+        ...trail,
+        nodes: trail.nodes.map((node) =>
+          node.id === nodeId
+            ? { ...node, paper: { ...node.paper, note } }
+            : node
+        ),
+      }))
+    )
+  }, [])
+
   return (
     <div className="flex h-dvh bg-background">
       <TrailSidebar
@@ -142,7 +182,12 @@ export function TrailsApp() {
       />
       <main className="flex flex-1 flex-col overflow-hidden">
         {activeTrail ? (
-          <DAGCanvas trail={activeTrail} onToggleRead={handleToggleRead} />
+          <DAGCanvas
+          trail={activeTrail}
+          onToggleRead={handleToggleRead}
+          onToggleStar={handleToggleStar}
+          onSaveNote={handleSaveNote}
+        />
         ) : (
           <WelcomeScreen onCreateTrail={handleCreateTrail} />
         )}

@@ -4,7 +4,7 @@ import { memo, useCallback } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { Paper } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Check, Circle } from "lucide-react"
+import { Check, Circle, Star } from "lucide-react"
 
 interface PaperNodeData {
   paper: Paper
@@ -94,6 +94,9 @@ function PaperNodeComponent({ data }: NodeProps) {
             </span>
             <span className="text-border">|</span>
             <span className="font-mono text-[11px]">{paper.year}</span>
+            {(paper.isStarred ?? false) && (
+              <Star className="ml-auto h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400" />
+            )}
           </p>
         </div>
       </div>
