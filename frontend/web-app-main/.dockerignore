@@ -12,6 +12,9 @@ out
 .git
 .gitignore
 
+# Local env overrides (Docker uses .env only; local dev can use .env.local)
+.env*.local
+
 # OS files
 .DS_Store
 Thumbs.db

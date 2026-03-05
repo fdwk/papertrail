@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Trail, TrailSummary } from "@/lib/types"
 import { TrailSidebar } from "@/components/trail-sidebar"
 import { DAGCanvas } from "@/components/dag-canvas"
@@ -11,8 +11,8 @@ import { backendFetch } from "@/lib/api-client"
 
 export function TrailsApp() {
   const router = useRouter()
-  const params = useParams<{ trailId?: string }>()
-  const routeTrailId = (params?.trailId as string | undefined) ?? null
+  const searchParams = useSearchParams()
+  const routeTrailId = searchParams.get("trail")
   const { isAuthenticated } = useAuth()
 
   const [trails, setTrails] = useState<TrailSummary[]>([])
@@ -57,7 +57,7 @@ export function TrailsApp() {
   const handleNewTrail = useCallback(() => {
     setActiveTrailId(null)
     setActiveTrail(null)
-    router.push("/")
+    router.push("/trails")
   }, [router])
 
   const handleCreateTrail = useCallback(
@@ -66,11 +66,11 @@ export function TrailsApp() {
         (t) => t.topic.toLowerCase() === topic.toLowerCase()
       )
       if (existing) {
-        router.push(`/trails/${existing.id}`)
+        router.push(`/trails?trail=${existing.id}`)
         return
       }
       // TODO: POST /trails when backend supports create
-      router.push("/")
+      router.push("/trails")
     },
     [trails, router]
   )
@@ -78,7 +78,7 @@ export function TrailsApp() {
   const handleSelectTrail = useCallback(
     (id: string) => {
       setActiveTrailId(id)
-      router.push(`/trails/${id}`)
+      router.push(`/trails?trail=${id}`)
     },
     [router]
   )

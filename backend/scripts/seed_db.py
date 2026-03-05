@@ -26,6 +26,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(backend))
 
 from app.database import SessionLocal
+from app.mock_data import _id as mock_id
 from app.models import User, Trail, Paper, UserPaper, PaperGraphEdge
 
 SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "papertrail-seed")
@@ -44,14 +45,14 @@ def load_seed_data() -> list[dict]:
 def seed(session=None):
     data = load_seed_data()
 
-    # Ensure seed user exists
-    seed_user_id = stable_uuid("seed-user")
-    user = session.get(User, seed_user_id)
+    # Demo user: matches mock_data so login (demo@papertrail.dev / password123) works.
+    demo_user_id = mock_id("user-demo")
+    user = session.get(User, demo_user_id)
     if not user:
         user = User(
-            id=seed_user_id,
-            email="seed@papertrail.local",
-            password_hash="seed-placeholder",
+            id=demo_user_id,
+            email="demo@papertrail.dev",
+            password_hash="password123",  # plaintext; mock auth compares directly
             date_created=datetime.now(timezone.utc),
         )
         session.add(user)
@@ -129,7 +130,13 @@ def seed(session=None):
                 session.add(edge)
 
     session.commit()
-    print("Seed completed: 1 user,", len(paper_id_to_uuid), "papers,", len(data), "trails.")
+    print(
+        "Seed completed: 1 user (demo@papertrail.dev / password123),",
+        len(paper_id_to_uuid),
+        "papers,",
+        len(data),
+        "trails.",
+    )
 
 
 def main():

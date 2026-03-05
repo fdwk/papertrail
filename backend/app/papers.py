@@ -6,9 +6,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from .auth import require_user
-from .mock_data import PAPERS_BY_KEY, set_user_paper_state
+from .database import get_db
+from .repositories.papers import update_user_paper_state as update_user_paper_state_db
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
@@ -24,14 +26,20 @@ def update_paper_user_state(
     paper_id: str,
     body: PaperUserStateUpdate,
     user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> dict:
-    if paper_id not in PAPERS_BY_KEY:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
-    set_user_paper_state(
-        user_id,
-        paper_id,
-        has_read=body.isRead,
-        note=body.note,
-        is_starred=body.isStarred,
-    )
-    return {"ok": True}
+    # Try UUID first (DB-backed trails)
+    try:
+        pid = uuid.UUID(paper_id)
+        if update_user_paper_state_db(
+            db,
+            user_id,
+            pid,
+            has_read=body.isRead,
+            note=body.note,
+            is_starred=body.isStarred,
+        ):
+            return {"ok": True}
+    except ValueError:
+        pass
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
