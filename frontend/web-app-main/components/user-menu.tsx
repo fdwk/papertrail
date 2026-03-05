@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { LogOut, User } from "lucide-react"
 
-export function UserMenu() {
+export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { user, logout } = useAuth()
   const router = useRouter()
 
@@ -27,17 +27,25 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent">
+        <button
+          className={
+            collapsed
+              ? "flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent"
+              : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent"
+          }
+        >
           <Avatar className="h-8 w-8 border border-sidebar-border">
             <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1 overflow-hidden">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">
-              {user.email}
-            </p>
-          </div>
+          {!collapsed && (
+            <div className="flex-1 overflow-hidden">
+              <p className="truncate text-sm font-medium text-sidebar-foreground">
+                {user.email}
+              </p>
+            </div>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">

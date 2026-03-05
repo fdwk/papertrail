@@ -3,7 +3,7 @@ import type { Node, Edge } from "@xyflow/react"
 import type { DAGNode } from "./types"
 
 const NODE_WIDTH = 280
-const NODE_HEIGHT = 80
+const NODE_HEIGHT = 140
 
 export function getLayoutedElements(dagNodes: DAGNode[]) {
   const g = new dagre.graphlib.Graph()
@@ -11,7 +11,7 @@ export function getLayoutedElements(dagNodes: DAGNode[]) {
   g.setGraph({
     rankdir: "TB",
     nodesep: 80,
-    ranksep: 140,
+    ranksep: 160,
     edgesep: 50,
     marginx: 50,
     marginy: 50,

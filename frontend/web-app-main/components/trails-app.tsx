@@ -201,9 +201,14 @@ export function TrailsApp() {
             onToggleRead={handleToggleRead}
             onToggleStar={handleToggleStar}
             onSaveNote={handleSaveNote}
+            onBack={handleNewTrail}
           />
         ) : (
-          <WelcomeScreen onCreateTrail={handleCreateTrail} />
+          <WelcomeScreen
+            onCreateTrail={handleCreateTrail}
+            onSelectTrail={handleSelectTrail}
+            recentTrails={trails}
+          />
         )}
       </main>
     </div>

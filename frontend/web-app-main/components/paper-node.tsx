@@ -10,14 +10,30 @@ interface PaperNodeData {
   paper: Paper
   nodeId: string
   isSelected?: boolean
+  isFrontier?: boolean
+  focusMode?: boolean
+  depth?: number
   onToggleRead?: (nodeId: string) => void
   onSelectNode?: (nodeId: string) => void
   [key: string]: unknown
 }
 
+function truncateAbstract(text: string, max = 80): string {
+  if (!text || text.length <= max) return text
+  return text.slice(0, max).trimEnd() + "..."
+}
+
 function PaperNodeComponent({ data }: NodeProps) {
-  const { paper, nodeId, isSelected, onToggleRead, onSelectNode } =
-    data as PaperNodeData
+  const {
+    paper,
+    nodeId,
+    isSelected,
+    isFrontier,
+    focusMode,
+    depth,
+    onToggleRead,
+    onSelectNode,
+  } = data as PaperNodeData
 
   const handleToggleRead = useCallback(
     (e: React.MouseEvent) => {
@@ -31,14 +47,13 @@ function PaperNodeComponent({ data }: NodeProps) {
     onSelectNode?.(nodeId)
   }, [onSelectNode, nodeId])
 
-  // Determine the "step" label based on read status
-  const stepNumber = paper.isRead ? null : null
+  const dimmed = focusMode && paper.isRead && !isSelected
 
   return (
     <div
       onClick={handleClick}
       className={cn(
-        "group w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
+        "group relative w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
         "hover:shadow-xl",
         isSelected && !paper.isRead &&
           "border-foreground/30 bg-card shadow-lg shadow-foreground/5",
@@ -47,7 +62,9 @@ function PaperNodeComponent({ data }: NodeProps) {
         !isSelected && paper.isRead &&
           "border-primary/30 bg-primary/5 shadow-md shadow-primary/5",
         !isSelected && !paper.isRead &&
-          "border-border bg-card shadow-md hover:border-foreground/20"
+          "border-border bg-card shadow-md hover:border-foreground/20",
+        dimmed && "focus-mode-dimmed",
+        focusMode && isFrontier && !paper.isRead && "animate-pulse-ring"
       )}
     >
       <Handle
@@ -55,6 +72,13 @@ function PaperNodeComponent({ data }: NodeProps) {
         position={Position.Top}
         className="!h-2.5 !w-2.5 !rounded-full !border-2 !border-background !bg-primary/50"
       />
+
+      {/* Depth badge */}
+      {depth != null && (
+        <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground shadow-sm ring-1 ring-border">
+          L{depth}
+        </span>
+      )}
 
       <div className="flex items-start gap-3 p-4">
         {/* Read/unread indicator */}
@@ -80,14 +104,12 @@ function PaperNodeComponent({ data }: NodeProps) {
           <h3
             className={cn(
               "text-sm font-semibold leading-snug",
-              paper.isRead
-                ? "text-primary"
-                : "text-card-foreground"
+              paper.isRead ? "text-primary" : "text-card-foreground"
             )}
           >
             {paper.title}
           </h3>
-          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="truncate">
               {paper.authors[0]}
               {paper.authors.length > 1 ? " et al." : ""}
@@ -98,6 +120,11 @@ function PaperNodeComponent({ data }: NodeProps) {
               <Star className="ml-auto h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400" />
             )}
           </p>
+          {paper.abstract && (
+            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground/70">
+              {truncateAbstract(paper.abstract)}
+            </p>
+          )}
         </div>
       </div>
 
