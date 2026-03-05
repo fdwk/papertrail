@@ -55,6 +55,8 @@ class Trail(Base):
     )
     name: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    topic: Mapped[str] = mapped_column(String, nullable=False)
+
     date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
@@ -133,19 +135,24 @@ class UserPaper(Base):
 class PaperGraphEdge(Base):
     """
     Edge in a user's trail graph. We model `nextNode` as another Paper in the same trail.
+    One paper can have multiple next nodes in a trail (DAG). Surrogate id as PK so
+    next_node_id can be null (terminal node / no next yet).
     """
 
     __tablename__ = "paper_graph_edges"
 
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     paper_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("papers.id", ondelete="CASCADE"),
-        primary_key=True,
+        nullable=False,
     )
     trail_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("trails.id", ondelete="CASCADE"),
-        primary_key=True,
+        nullable=False,
     )
     next_node_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
