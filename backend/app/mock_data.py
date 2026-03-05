@@ -16,18 +16,8 @@ def _id(s: str) -> uuid.UUID:
     return uuid.uuid5(NAMESPACE, s)
 
 
-# ----- Users -----
-MOCK_USERS: list[dict[str, Any]] = [
-    {
-        "id": _id("user-demo"),
-        "email": "demo@papertrail.dev",
-        "password_hash": "password123",  # plaintext for mock
-    }
-]
-
-
-def get_user_by_email(email: str) -> dict | None:
-    for u in MOCK_USERS:
-        if u["email"] == email:
-            return u
-    return None
+"""
+NOTE: User data has moved to the real database (models.User).
+This module now only holds mock trails/papers/user_papers for
+graph-related endpoints.
+"""
