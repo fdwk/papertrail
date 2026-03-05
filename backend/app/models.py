@@ -53,8 +53,6 @@ class Trail(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name: Mapped[str | None] = mapped_column(String, nullable=True)
-
     topic: Mapped[str] = mapped_column(String, nullable=False)
 
     date_created: Mapped[datetime] = mapped_column(
