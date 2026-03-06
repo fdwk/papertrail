@@ -37,3 +37,8 @@ class TrailDetailOut(BaseModel):
     topic: str
     createdAt: str
     nodes: list[DAGNodeOut]
+
+
+class CreateTrailIn(BaseModel):
+    """Request body for creating a new trail."""
+    topic: str

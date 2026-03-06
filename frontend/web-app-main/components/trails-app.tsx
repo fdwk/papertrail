@@ -20,6 +20,7 @@ export function TrailsApp() {
   const [activeTrail, setActiveTrail] = useState<Trail | null>(null)
   const [trailsLoading, setTrailsLoading] = useState(false)
   const [trailDetailLoading, setTrailDetailLoading] = useState(false)
+  const [trailDetailError, setTrailDetailError] = useState<string | null>(null)
 
   useEffect(() => {
     setActiveTrailId(routeTrailId)
@@ -29,27 +30,54 @@ export function TrailsApp() {
   useEffect(() => {
     if (!isAuthenticated) {
       setTrails([])
+      setTrailsLoading(false)
       return
     }
     setTrailsLoading(true)
+    let cancelled = false
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return
+      setTrailsLoading(false)
+    }, 15000)
     backendFetch<TrailSummary[]>("/trails/")
       .then((res) => {
+        if (cancelled) return
         if (res.ok && Array.isArray(res.data)) setTrails(res.data)
       })
-      .finally(() => setTrailsLoading(false))
+      .catch(() => { /* ensure finally runs if something throws */ })
+      .finally(() => {
+        cancelled = true
+        window.clearTimeout(timeoutId)
+        setTrailsLoading(false)
+      })
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
   }, [isAuthenticated])
 
   // When a trail is selected, fetch full trail with graph.
   useEffect(() => {
     if (!routeTrailId || !isAuthenticated) {
       setActiveTrail(null)
+      setTrailDetailError(null)
       return
     }
     setTrailDetailLoading(true)
+    setTrailDetailError(null)
     setActiveTrail(null)
     backendFetch<Trail>(`/trails/${routeTrailId}`)
       .then((res) => {
-        if (res.ok && res.data) setActiveTrail(res.data)
+        if (res.ok && res.data) {
+          setActiveTrail(res.data)
+          setTrailDetailError(null)
+        } else {
+          const msg =
+            res.status === 0
+              ? "Network error. Is the backend running?"
+              : (res.data as { detail?: string })?.detail ?? "Failed to load trail"
+          setTrailDetailError(msg)
+        }
       })
       .finally(() => setTrailDetailLoading(false))
   }, [routeTrailId, isAuthenticated])
@@ -61,7 +89,7 @@ export function TrailsApp() {
   }, [router])
 
   const handleCreateTrail = useCallback(
-    (topic: string) => {
+    async (topic: string) => {
       const existing = trails.find(
         (t) => t.topic.toLowerCase() === topic.toLowerCase()
       )
@@ -69,8 +97,16 @@ export function TrailsApp() {
         router.push(`/trails?trail=${existing.id}`)
         return
       }
-      // TODO: POST /trails when backend supports create
-      router.push("/trails")
+      const res = await backendFetch<TrailSummary>("/trails/", {
+        method: "POST",
+        body: JSON.stringify({ topic }),
+      })
+      if (res.ok && res.data) {
+        setTrails((prev) => [...prev, res.data as TrailSummary])
+        router.push(`/trails?trail=${(res.data as TrailSummary).id}`)
+      } else {
+        router.push("/trails")
+      }
     },
     [trails, router]
   )
@@ -105,16 +141,10 @@ export function TrailsApp() {
                 }
               : null
           )
-          setTrails((prev) =>
-            prev.map((t) =>
-              t.id === activeTrailId
-                ? {
-                    ...t,
-                    readCount: (t.readCount ?? 0) + (nextRead ? 1 : -1),
-                  }
-                : t
-            )
-          )
+          // Refetch trail list so every trail's progress (including those sharing this paper) is correct
+          backendFetch<TrailSummary[]>("/trails/").then((listRes) => {
+            if (listRes.ok && Array.isArray(listRes.data)) setTrails(listRes.data)
+          })
         }
       })
     },
@@ -194,6 +224,30 @@ export function TrailsApp() {
         {trailDetailLoading && routeTrailId ? (
           <div className="flex flex-1 items-center justify-center text-muted-foreground">
             Loading trail…
+          </div>
+        ) : trailDetailError && routeTrailId ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
+            <p>{trailDetailError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setTrailDetailError(null)
+                setTrailDetailLoading(true)
+                backendFetch<Trail>(`/trails/${routeTrailId}`).then((res) => {
+                  if (res.ok && res.data) {
+                    setActiveTrail(res.data)
+                    setTrailDetailError(null)
+                  } else {
+                    setTrailDetailError(
+                      (res.data as { detail?: string })?.detail ?? "Failed to load trail"
+                    )
+                  }
+                }).finally(() => setTrailDetailLoading(false))
+              }}
+              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
+            >
+              Retry
+            </button>
           </div>
         ) : activeTrail ? (
           <DAGCanvas

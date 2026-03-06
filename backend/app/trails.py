@@ -10,10 +10,11 @@ from sqlalchemy.orm import Session
 from .auth import require_user
 from .database import get_db
 from .repositories.trails import (
+    create_trail_with_random_graph as create_trail_with_random_graph_db,
     get_trail_detail as get_trail_detail_db,
     list_trails_for_user as list_trails_for_user_db,
 )
-from .schemas import TrailDetailOut, TrailSummaryOut
+from .schemas import CreateTrailIn, TrailDetailOut, TrailSummaryOut
 
 router = APIRouter(prefix="/trails", tags=["trails"])
 
@@ -24,6 +25,16 @@ def list_trails_from_db(
 ) -> list[TrailSummaryOut]:
     """List trails for the current user from the database (no mock data)."""
     return list_trails_for_user_db(db, user_id)
+
+
+@router.post("/", response_model=TrailSummaryOut, status_code=status.HTTP_201_CREATED)
+def create_trail(
+    body: CreateTrailIn,
+    user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TrailSummaryOut:
+    """Create a new trail for the user with a random graph of 3-4 papers from the DB."""
+    return create_trail_with_random_graph_db(db, user_id, body.topic)
 
 
 @router.get("/{trail_id}", response_model=TrailDetailOut)

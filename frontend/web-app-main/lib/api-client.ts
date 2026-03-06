@@ -45,7 +45,7 @@ export async function apiFetch<T = unknown>(
   return { ok: res.ok, status: res.status, data }
 }
 
-/** Calls FastAPI backend. Attaches JWT if present. */
+/** Calls FastAPI backend. Attaches JWT if present. Never throws; returns ok: false on network error. */
 export async function backendFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -62,10 +62,19 @@ export async function backendFetch<T = unknown>(
     headers["Authorization"] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${BACKEND_API_BASE}${path}`, {
-    ...options,
-    headers,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BACKEND_API_BASE}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      data: { message: "Failed to fetch" } as T,
+    }
+  }
 
   let data: T
   try {

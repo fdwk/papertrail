@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Paper, Trail, UserPaper
+from app.models import Paper, PaperGraphEdge, Trail, UserPaper
 from app.schemas import DAGNodeOut, PaperOut, TrailDetailOut, TrailSummaryOut
 
 
@@ -72,7 +73,14 @@ def get_trail_detail(db: Session, trail_id: uuid.UUID, user_id: uuid.UUID) -> Tr
     for pid in paper_ids:
         deps_by_paper.setdefault(pid, [])
 
-    # Fetch papers and user_papers
+    # Fetch papers and user_papers (skip query if no papers to avoid IN () issues)
+    if not paper_ids:
+        return TrailDetailOut(
+            id=str(trail.id),
+            topic=trail.topic,
+            createdAt=trail.date_created.strftime("%Y-%m-%d"),
+            nodes=[],
+        )
     papers = {p.id: p for p in db.query(Paper).filter(Paper.id.in_(paper_ids)).all()}
     user_papers = {
         (up.user_id, up.paper_id): up
@@ -89,18 +97,19 @@ def get_trail_detail(db: Session, trail_id: uuid.UUID, user_id: uuid.UUID) -> Tr
             continue
         up = user_papers.get((user_id, paper_id))
         authors = [a.strip() for a in (paper.author or "").split(",") if a.strip()]
+        year = paper.date.year if paper.date else 0
         nodes.append(
             DAGNodeOut(
                 id=str(paper_id),
                 paper=PaperOut(
                     id=str(paper_id),
-                    title=paper.title,
+                    title=paper.title or "",
                     authors=authors,
-                    year=paper.date.year,
+                    year=year,
                     abstract=paper.abstract or "",
                     url=paper.url or "",
                     isRead=up.has_read if up else False,
-                    note=up.note or "",
+                    note=up.note or "" if up else "",
                     isStarred=up.is_starred if up else False,
                 ),
                 dependencies=deps_by_paper.get(paper_id, []),
@@ -112,4 +121,89 @@ def get_trail_detail(db: Session, trail_id: uuid.UUID, user_id: uuid.UUID) -> Tr
         topic=trail.topic,
         createdAt=trail.date_created.strftime("%Y-%m-%d"),
         nodes=nodes,
+    )
+
+
+def create_trail_with_random_graph(
+    db: Session, user_id: uuid.UUID, topic: str
+) -> TrailSummaryOut:
+    """
+    Create a new trail for the user and populate it with a random DAG of 3-4 papers
+    from the papers table. Edges are created to form a simple random DAG.
+    """
+    trail = Trail(user_id=user_id, topic=topic)
+    db.add(trail)
+    db.flush()
+
+    papers = (
+        db.query(Paper)
+        .order_by(func.random())
+        .limit(4)
+        .all()
+    )
+    if len(papers) < 2:
+        return TrailSummaryOut(
+            id=str(trail.id),
+            topic=trail.topic,
+            createdAt=trail.date_created.strftime("%Y-%m-%d"),
+            readCount=0,
+            totalCount=len(papers),
+        )
+
+    # Build a simple DAG: 0 -> 1, 0 -> 2, and if 4 papers: 1 -> 3, 2 -> 3
+    edges_to_create = [(papers[0].id, papers[1].id)]
+    if len(papers) >= 3:
+        edges_to_create.append((papers[0].id, papers[2].id))
+    if len(papers) >= 4:
+        edges_to_create.append((papers[1].id, papers[3].id))
+        edges_to_create.append((papers[2].id, papers[3].id))
+
+    for paper_id, next_node_id in edges_to_create:
+        edge = PaperGraphEdge(
+            paper_id=paper_id,
+            trail_id=trail.id,
+            next_node_id=next_node_id,
+        )
+        db.add(edge)
+
+    # Ensure UserPaper rows exist for every paper in the trail (defaults: not read, no note, not starred).
+    # Skip pairs that already exist so we don't overwrite existing user state.
+    paper_ids_in_trail = {p.id for p in papers}
+    existing = {
+        (up.user_id, up.paper_id)
+        for up in db.query(UserPaper).filter(
+            UserPaper.user_id == user_id,
+            UserPaper.paper_id.in_(paper_ids_in_trail),
+        ).all()
+    }
+    for pid in paper_ids_in_trail:
+        if (user_id, pid) not in existing:
+            db.add(
+                UserPaper(
+                    user_id=user_id,
+                    paper_id=pid,
+                    has_read=False,
+                    note=None,
+                    is_starred=False,
+                )
+            )
+
+    db.commit()
+
+    read_count = (
+        db.query(UserPaper)
+        .filter(
+            UserPaper.user_id == user_id,
+            UserPaper.paper_id.in_(paper_ids_in_trail),
+            UserPaper.has_read.is_(True),
+        )
+        .count()
+    )
+
+    return TrailSummaryOut(
+        id=str(trail.id),
+        topic=trail.topic,
+        createdAt=trail.date_created.strftime("%Y-%m-%d"),
+        readCount=read_count,
+        totalCount=len(papers),
     )
