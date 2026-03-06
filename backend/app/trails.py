@@ -5,12 +5,14 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from .auth import require_user
 from .database import get_db
 from .repositories.trails import (
     create_trail_with_random_graph as create_trail_with_random_graph_db,
+    delete_trail as delete_trail_db,
     get_trail_detail as get_trail_detail_db,
     list_trails_for_user as list_trails_for_user_db,
 )
@@ -52,3 +54,19 @@ def get_trail_detail_from_db(
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trail not found")
     return result
+
+
+@router.delete("/{trail_id}")
+def delete_trail(
+    trail_id: str,
+    user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    """Delete trail and its paper_graph_edges (cascade)."""
+    try:
+        tid = uuid.UUID(trail_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trail not found")
+    if not delete_trail_db(db, tid, user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trail not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

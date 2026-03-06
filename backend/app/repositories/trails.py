@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Paper, PaperGraphEdge, Trail, UserPaper
@@ -207,3 +207,20 @@ def create_trail_with_random_graph(
         readCount=read_count,
         totalCount=len(papers),
     )
+
+
+def delete_trail(db: Session, trail_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    """
+    Delete a trail. PaperGraphEdge rows for this trail are removed by cascade (Trail.edges).
+    Returns True if the trail was found and deleted.
+    """
+    trail = (
+        db.query(Trail)
+        .filter(Trail.id == trail_id, Trail.user_id == user_id)
+        .first()
+    )
+    if not trail:
+        return False
+    db.delete(trail)
+    db.commit()
+    return True

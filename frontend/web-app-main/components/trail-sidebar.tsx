@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   Search,
   Map,
+  Trash2,
 } from "lucide-react"
 import { useState, useMemo } from "react"
 import Link from "next/link"
@@ -25,6 +26,7 @@ interface TrailSidebarProps {
   activeTrailId: string | null
   onSelectTrail: (id: string) => void
   onNewTrail: () => void
+  onDeleteTrail?: (id: string) => void
   trailsLoading?: boolean
 }
 
@@ -96,6 +98,7 @@ export function TrailSidebar({
   activeTrailId,
   onSelectTrail,
   onNewTrail,
+  onDeleteTrail,
   trailsLoading = false,
 }: TrailSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -247,7 +250,7 @@ export function TrailSidebar({
                 const progress = getTrailProgress(trail)
                 const isActive = trail.id === activeTrailId
                 return (
-                  <li key={trail.id}>
+                  <li key={trail.id} className="flex w-full items-stretch gap-0">
                     <button
                       onClick={() => {
                         onSelectTrail(trail.id)
@@ -255,10 +258,10 @@ export function TrailSidebar({
                       }}
                       title={collapsed ? trail.topic : undefined}
                       className={cn(
-                        "group relative flex w-full items-center text-left text-sm transition-all",
+                        "group relative flex min-w-0 flex-1 items-center text-left text-sm transition-all",
                         collapsed
                           ? "justify-center rounded-lg px-0 py-2"
-                          : "gap-2 rounded-xl px-3 py-2.5",
+                          : "gap-2 rounded-l-xl rounded-r-none px-3 py-2.5",
                         isActive
                           ? "bg-sidebar-accent text-sidebar-accent-foreground"
                           : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -284,13 +287,39 @@ export function TrailSidebar({
                                 : "text-muted-foreground/40 group-hover:rotate-45 group-hover:text-muted-foreground/60"
                             )}
                           />
-                          <span className="flex-1 truncate font-medium">
+                          <span className="min-w-0 flex-1 truncate font-medium">
                             {trail.topic}
                           </span>
-                          <ProgressRing progress={progress} />
                         </>
                       )}
                     </button>
+                    {!collapsed && isActive && onDeleteTrail && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDeleteTrail(trail.id)
+                          setMobileOpen(false)
+                        }}
+                        title="Delete trail"
+                        className={cn(
+                          "flex-shrink-0 border-l border-sidebar-border/50 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-destructive",
+                          "bg-sidebar-accent"
+                        )}
+                        aria-label={`Delete trail ${trail.topic}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {!collapsed && (
+                      <span
+                        className={cn(
+                          "flex flex-shrink-0 items-center rounded-r-xl border-l border-sidebar-border/50 pr-2 pl-1",
+                          isActive ? "bg-sidebar-accent" : "bg-transparent"
+                        )}
+                      >
+                        <ProgressRing progress={progress} />
+                      </span>
+                    )}
                   </li>
                 )
               })}

@@ -119,6 +119,21 @@ export function TrailsApp() {
     [router]
   )
 
+  const handleDeleteTrail = useCallback(
+    async (trailId: string) => {
+      const res = await backendFetch(`/trails/${trailId}`, { method: "DELETE" })
+      if (res.ok) {
+        setTrails((prev) => prev.filter((t) => t.id !== trailId))
+        if (trailId === activeTrailId) {
+          setActiveTrailId(null)
+          setActiveTrail(null)
+          router.push("/trails")
+        }
+      }
+    },
+    [activeTrailId, router]
+  )
+
   const handleToggleRead = useCallback(
     (nodeId: string) => {
       if (!activeTrail) return
@@ -218,6 +233,7 @@ export function TrailsApp() {
         activeTrailId={activeTrailId}
         onSelectTrail={handleSelectTrail}
         onNewTrail={handleNewTrail}
+        onDeleteTrail={handleDeleteTrail}
         trailsLoading={trailsLoading}
       />
       <main className="flex flex-1 flex-col overflow-hidden">
