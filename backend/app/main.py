@@ -5,6 +5,18 @@ from .auth import router as auth_router
 from .papers import router as papers_router
 from .trails import router as trails_router
 
+import logging
+from rich.logging import RichHandler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)]
+)
+
+logger = logging.getLogger("backend")
+
 app = FastAPI()
 
 app.add_middleware(

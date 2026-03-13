@@ -83,6 +83,7 @@ class Paper(Base):
     author: Mapped[str | None] = mapped_column(String, nullable=True)
     abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
     doi: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    openalex_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     url: Mapped[str | None] = mapped_column(String, nullable=True)
 

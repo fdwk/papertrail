@@ -1,3 +1,5 @@
+export type TrailSize = "small" | "medium" | "large"
+
 export interface Paper {
   id: string
   title: string
