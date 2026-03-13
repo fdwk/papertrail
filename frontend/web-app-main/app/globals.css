@@ -143,6 +143,16 @@
   }
 }
 
+/* Hide scrollbars while preserving scroll behavior */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
 /* ── React Flow overrides ──────────────────────────── */
 .react-flow__node {
   cursor: default !important;
