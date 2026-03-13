@@ -45,8 +45,15 @@ def test_generate_trail_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         "suggest_papers",
         lambda topic, size="medium": [{"title": "p1", "authors": "a", "year": 2017}],
     )
-    monkeypatch.setattr(trail_generator, "search_by_title", lambda title, authors=None: c1)
-    monkeypatch.setattr(trail_generator, "search_works", lambda topic, limit=10: [c2, c3])
+    # Async OpenAlex helpers are used inside the pipeline; stub them here.
+    async def fake_async_search_by_title(title: str, authors: str | None = None) -> dict:  # type: ignore[override]
+        return c1
+
+    async def fake_async_search_works(topic: str, limit: int = 10) -> list[dict]:  # type: ignore[override]
+        return [c2, c3]
+
+    monkeypatch.setattr(trail_generator, "async_search_by_title", fake_async_search_by_title)
+    monkeypatch.setattr(trail_generator, "async_search_works", fake_async_search_works)
     monkeypatch.setattr(
         trail_generator,
         "select_and_order_papers",
@@ -84,8 +91,14 @@ def test_generate_trail_falls_back_when_curation_fails(monkeypatch: pytest.Monke
         "suggest_papers",
         lambda topic, size="medium": [{"title": "x", "authors": "", "year": 0}],
     )
-    monkeypatch.setattr(trail_generator, "search_by_title", lambda title, authors=None: candidates[0])
-    monkeypatch.setattr(trail_generator, "search_works", lambda topic, limit=10: candidates[1:])
+    async def fake_async_search_by_title(title: str, authors: str | None = None) -> dict:  # type: ignore[override]
+        return candidates[0]
+
+    async def fake_async_search_works(topic: str, limit: int = 10) -> list[dict]:  # type: ignore[override]
+        return candidates[1:]
+
+    monkeypatch.setattr(trail_generator, "async_search_by_title", fake_async_search_by_title)
+    monkeypatch.setattr(trail_generator, "async_search_works", fake_async_search_works)
     monkeypatch.setattr(
         trail_generator,
         "select_and_order_papers",
@@ -114,7 +127,11 @@ def test_generate_trail_falls_back_when_curation_fails(monkeypatch: pytest.Monke
 
 def test_generate_trail_raises_when_candidates_too_few(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(trail_generator, "suggest_papers", lambda topic, size="medium": [])
-    monkeypatch.setattr(trail_generator, "search_works", lambda topic, limit=10: [_candidate("W1", 2019)])
+
+    async def fake_async_search_works(topic: str, limit: int = 10) -> list[dict]:  # type: ignore[override]
+        return [_candidate("W1", 2019)]
+
+    monkeypatch.setattr(trail_generator, "async_search_works", fake_async_search_works)
 
     with pytest.raises(trail_generator.TrailGenerationError, match="Not enough verified candidate papers"):
         trail_generator.generate_trail(db=object(), user_id=uuid.uuid4(), topic="topic")

@@ -15,7 +15,11 @@ from app.services.openai_client import (
     suggest_papers,
 )
 from app.services import openalex
-from app.services.openalex import OpenAlexError
+from app.services.openalex import (
+    OpenAlexError,
+    async_search_by_title,
+    async_search_works,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,10 @@ def _dedupe_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
     result: list[dict[str, Any]] = []
     for candidate in candidates:
         key = (candidate.get("openalex_id") or "").strip()
+        if not key:
+            title = (candidate.get("title") or "").strip().lower()
+            year = int(candidate.get("year") or 0)
+            key = f"{title}:{year}" if title else ""
         if not key or key in seen:
             continue
         seen.add(key)
@@ -81,12 +89,112 @@ def _build_citation_edges(candidates: list[dict[str, Any]]) -> list[dict[str, st
     return edges
 
 
+def _filter_edges_to_dag(
+    node_ids: set[str],
+    edges: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Filter edges to enforce a DAG: drop any edge that would introduce a cycle.
+
+    Uses an incremental Kahn-style process to keep only acyclic edges.
+    """
+    adj: dict[str, set[str]] = {nid: set() for nid in node_ids}
+    indegree: dict[str, int] = {nid: 0 for nid in node_ids}
+    kept_edges: list[dict[str, str]] = []
+
+    for edge in edges:
+        from_id = str(edge.get("from") or "").strip()
+        to_id = str(edge.get("to") or "").strip()
+        if from_id not in node_ids or to_id not in node_ids or from_id == to_id:
+            continue
+
+        # Tentatively add edge.
+        adj[from_id].add(to_id)
+        indegree[to_id] += 1
+
+        # Check for cycle via reachability from `to_id` back to `from_id`.
+        stack = [to_id]
+        visited: set[str] = set()
+        introduces_cycle = False
+        while stack:
+            node = stack.pop()
+            if node == from_id:
+                introduces_cycle = True
+                break
+            if node in visited:
+                continue
+            visited.add(node)
+            stack.extend(adj.get(node, ()))
+
+        if introduces_cycle:
+            # Revert this edge.
+            adj[from_id].remove(to_id)
+            indegree[to_id] -= 1
+            continue
+
+        kept_edges.append({"from": from_id, "to": to_id})
+
+    return kept_edges
+
+
 def _fallback_ordering(
     candidates: list[dict[str, Any]],
     *,
     max_papers: int,
+    citation_edges: list[dict[str, str]] | None = None,
 ) -> tuple[list[str], list[dict[str, str]]]:
-    ordered = sorted(candidates, key=lambda p: (int(p.get("year") or 0), -(int(p.get("citation_count") or 0))))
+    """Fallback ordering when GPT selection fails.
+
+    Prefer using citation_edges to build a DAG and topologically sort it.
+    If no usable edges exist, fall back to a simple chronological chain.
+    """
+    id_to_candidate = {
+        (c.get("openalex_id") or "").strip(): c
+        for c in candidates
+        if (c.get("openalex_id") or "").strip()
+    }
+
+    # Use graph-based ordering if we have edges.
+    if citation_edges:
+        # Build adjacency and indegree.
+        adj: dict[str, set[str]] = {pid: set() for pid in id_to_candidate}
+        indegree: dict[str, int] = {pid: 0 for pid in id_to_candidate}
+        for edge in citation_edges:
+            from_id = str(edge.get("from") or "").strip()
+            to_id = str(edge.get("to") or "").strip()
+            if from_id not in id_to_candidate or to_id not in id_to_candidate or from_id == to_id:
+                continue
+            if to_id not in adj[from_id]:
+                adj[from_id].add(to_id)
+                indegree[to_id] += 1
+
+        # Kahn topological sort.
+        queue: list[str] = [nid for nid, deg in indegree.items() if deg == 0]
+        ordered_ids: list[str] = []
+        idx = 0
+        while idx < len(queue):
+            node = queue[idx]
+            idx += 1
+            ordered_ids.append(node)
+            for nbr in adj.get(node, ()):
+                indegree[nbr] -= 1
+                if indegree[nbr] == 0:
+                    queue.append(nbr)
+
+        # If we covered at least one node, use that topological order.
+        if ordered_ids:
+            selected = ordered_ids[:max_papers]
+            edges: list[dict[str, str]] = []
+            for from_id, tos in adj.items():
+                for to_id in tos:
+                    if from_id in selected and to_id in selected and from_id != to_id:
+                        edges.append({"from": from_id, "to": to_id})
+            return selected, edges
+
+    # Chronological chain fallback.
+    ordered = sorted(
+        candidates,
+        key=lambda p: (int(p.get("year") or 0), -(int(p.get("citation_count") or 0))),
+    )
     selected = [(paper.get("openalex_id") or "").strip() for paper in ordered][:max_papers]
     selected = [sid for sid in selected if sid]
     edges: list[dict[str, str]] = []
@@ -95,28 +203,20 @@ def _fallback_ordering(
     return selected, edges
 
 
-# Backwards-compatible sync search helpers so tests can monkeypatch these
-def search_by_title(title: str, authors_hint: str | None = None) -> dict[str, Any] | None:
-    return openalex.search_by_title(title, authors_hint)
-
-
-def search_works(topic: str, limit: int = 10) -> list[dict[str, Any]]:
-    return openalex.search_works(topic, limit=limit)
-
-
-async def generate_trail_async(
-    db: Session,
-    user_id: uuid.UUID,
+async def _run_trail_pipeline(
     topic: str,
-    size: TrailSize = "medium",
-) -> TrailSummaryOut:
-    topic = topic.strip()
-    if not topic:
-        raise TrailGenerationError("Topic cannot be empty.")
+    size: TrailSize,
+) -> tuple[
+    list[dict[str, Any]],  # candidates
+    list[dict[str, str]],  # citation_edges
+    list[dict[str, Any]],  # selected_papers
+    list[dict[str, str]],  # selected_edges
+]:
+    """Core trail generation pipeline shared by async and streaming flows."""
     config = TRAIL_SIZE_CONFIG[size]
 
-    # Start supplementary OpenAlex search immediately so it overlaps with OpenAI suggestion latency.
-    topic_task = asyncio.create_task(asyncio.to_thread(search_works, topic, config["search_limit"]))
+    # Launch OpenAlex supplemental search and GPT suggestions concurrently.
+    supplement_task = asyncio.create_task(async_search_works(topic, config["search_limit"]))
 
     try:
         suggestions = await asyncio.to_thread(suggest_papers, topic, size)
@@ -124,23 +224,23 @@ async def generate_trail_async(
         logger.warning("GPT suggest_papers failed, falling back to OpenAlex search: %s", exc)
         suggestions = []
 
-    # Fire OpenAlex title lookups concurrently (running sync helpers in a thread pool).
-    title_author_pairs: list[tuple[str, Any]] = []
+    # Verify GPT suggestions via OpenAlex title lookup concurrently.
     title_tasks: list[asyncio.Task] = []
     for suggestion in suggestions[: config["suggest_limit"]]:
         title = (suggestion.get("title") or "").strip()
         if not title:
             continue
-        title_author_pairs.append((title, suggestion.get("authors")))
-        title_tasks.append(asyncio.to_thread(search_by_title, title, suggestion.get("authors")))
+        authors = suggestion.get("authors")
+        title_tasks.append(asyncio.create_task(async_search_by_title(title, authors)))
 
-    results = await asyncio.gather(*title_tasks, topic_task, return_exceptions=True)
-
+    # Await title lookups and supplemental search together.
+    results = await asyncio.gather(*title_tasks, supplement_task, return_exceptions=True)
     title_results = results[:-1]
     supplement_result = results[-1] if results else []
 
     verified: list[dict[str, Any]] = []
-    for (title, _authors), result in zip(title_author_pairs, title_results):
+    for suggestion, result in zip(suggestions[: config["suggest_limit"]], title_results):
+        title = (suggestion.get("title") or "").strip()
         if isinstance(result, OpenAlexError):
             logger.warning("OpenAlex title search failed for '%s': %s", title, result)
             continue
@@ -162,7 +262,11 @@ async def generate_trail_async(
     if len(candidates) < 3:
         raise TrailGenerationError("Not enough verified candidate papers from OpenAlex.")
 
-    citation_edges = _build_citation_edges(candidates)
+    raw_edges = _build_citation_edges(candidates)
+    citation_edges = _filter_edges_to_dag(
+        {c.get("openalex_id", "").strip() for c in candidates if (c.get("openalex_id") or "").strip()},
+        raw_edges,
+    )
 
     id_to_candidate = {
         (candidate.get("openalex_id") or "").strip(): candidate for candidate in candidates
@@ -184,16 +288,38 @@ async def generate_trail_async(
             if from_id in selected_set and to_id in selected_set and from_id != to_id:
                 selected_edges.append({"from": from_id, "to": to_id})
     except OpenAIClientError as exc:
-        logger.warning("GPT select_and_order failed, falling back to chronological ordering: %s", exc)
-        selected_ids, selected_edges = _fallback_ordering(candidates, max_papers=config["max_papers"])
+        logger.warning("GPT select_and_order failed, falling back to ordering: %s", exc)
+        selected_ids, selected_edges = _fallback_ordering(
+            candidates,
+            max_papers=config["max_papers"],
+            citation_edges=citation_edges,
+        )
         selected_papers = [id_to_candidate[sid] for sid in selected_ids if sid in id_to_candidate]
 
     if len(selected_papers) < 3:
-        selected_ids, selected_edges = _fallback_ordering(candidates, max_papers=config["max_papers"])
+        selected_ids, selected_edges = _fallback_ordering(
+            candidates,
+            max_papers=config["max_papers"],
+            citation_edges=citation_edges,
+        )
         selected_papers = [id_to_candidate[sid] for sid in selected_ids if sid in id_to_candidate]
 
     if len(selected_papers) < 3:
         raise TrailGenerationError("Unable to select enough papers for a trail.")
+
+    return candidates, citation_edges, selected_papers, selected_edges
+
+
+async def generate_trail_async(
+    db: Session,
+    user_id: uuid.UUID,
+    topic: str,
+    size: TrailSize = "medium",
+) -> TrailSummaryOut:
+    topic = topic.strip()
+    if not topic:
+        raise TrailGenerationError("Topic cannot be empty.")
+    _, _, selected_papers, selected_edges = await _run_trail_pipeline(topic, size)
 
     return create_trail_from_generated_data(
         db=db,
@@ -224,7 +350,7 @@ async def generate_trail_stream(
     }
 
     # Start supplementary OpenAlex search immediately so it overlaps with OpenAI suggestion latency.
-    supplement_task = asyncio.create_task(asyncio.to_thread(search_works, topic, config["search_limit"]))
+    supplement_task = asyncio.create_task(async_search_works(topic, config["search_limit"]))
     suggest_task = asyncio.create_task(asyncio.to_thread(suggest_papers, topic, size))
     streamed_openalex_ids: set[str] = set()
     supplement: list[dict[str, Any]] = []
@@ -293,7 +419,7 @@ async def generate_trail_stream(
     }
 
     async def _lookup_with_title(title: str, authors: Any):
-        result = await asyncio.to_thread(search_by_title, title, authors)
+        result = await async_search_by_title(title, authors)
         return title, result
 
     title_tasks: list[asyncio.Task] = []
@@ -325,14 +451,7 @@ async def generate_trail_stream(
                     "paper": _paper_preview(result, verified=True),
                 }
 
-    if not supplement and supplement_task.done():
-        try:
-            supplement = await supplement_task
-        except OpenAlexError as exc:
-            logger.warning("OpenAlex supplementary search failed: %s", exc)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during OpenAlex supplementary search: %s", exc)
-    elif not supplement:
+    if not supplement:
         try:
             supplement = await supplement_task
         except OpenAlexError as exc:
@@ -360,7 +479,11 @@ async def generate_trail_stream(
         "message": "Curating a coherent learning path...",
     }
 
-    citation_edges = _build_citation_edges(candidates)
+    raw_edges = _build_citation_edges(candidates)
+    citation_edges = _filter_edges_to_dag(
+        {c.get("openalex_id", "").strip() for c in candidates if (c.get("openalex_id") or "").strip()},
+        raw_edges,
+    )
 
     id_to_candidate = {
         (candidate.get("openalex_id") or "").strip(): candidate for candidate in candidates
@@ -382,12 +505,20 @@ async def generate_trail_stream(
             if from_id in selected_set and to_id in selected_set and from_id != to_id:
                 selected_edges.append({"from": from_id, "to": to_id})
     except OpenAIClientError as exc:
-        logger.warning("GPT select_and_order failed, falling back to chronological ordering: %s", exc)
-        selected_ids, selected_edges = _fallback_ordering(candidates, max_papers=config["max_papers"])
+        logger.warning("GPT select_and_order failed, falling back to ordering: %s", exc)
+        selected_ids, selected_edges = _fallback_ordering(
+            candidates,
+            max_papers=config["max_papers"],
+            citation_edges=citation_edges,
+        )
         selected_papers = [id_to_candidate[sid] for sid in selected_ids if sid in id_to_candidate]
 
     if len(selected_papers) < 3:
-        selected_ids, selected_edges = _fallback_ordering(candidates, max_papers=config["max_papers"])
+        selected_ids, selected_edges = _fallback_ordering(
+            candidates,
+            max_papers=config["max_papers"],
+            citation_edges=citation_edges,
+        )
         selected_papers = [id_to_candidate[sid] for sid in selected_ids if sid in id_to_candidate]
 
     if len(selected_papers) < 3:

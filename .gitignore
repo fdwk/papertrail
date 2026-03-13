@@ -10,3 +10,5 @@ __pycache__/
 
 .openai_audit/
 .py_test_cache/
+
+**/.env

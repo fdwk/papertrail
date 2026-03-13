@@ -171,13 +171,19 @@ def select_and_order_papers(
                 "content": (
                     "You are constructing a reading trail of academic papers. "
                     f"Select the best {constraints['min_papers']}-{constraints['max_papers']} papers that are most influential and relevant to the topic. "
-                    "Organize them as a DAG ordering representing a logical learning progression. "
+                    "Organize them as a DAG representing a logical learning progression. "
                     "Edges point from prerequisite paper to dependent paper. "
+
+                    "Prefer a chain-like progression where most papers build on exactly one prior paper. "
+                    "Minimize branching and keep fan-out small (avoid a single paper leading to many children). "
+                    "Prefer deeper structures over wide ones. Aim for a trail depth of at least 3–5 levels when possible. "
+
+                    "Occasionally include synthesis papers that combine 2+ prerequisite works. "
+                    "No more than 2 root nodes with no prerequisites. "
+
+                    "Avoid redundant transitive edges. "
                     "Use only paper IDs from the input and do not invent new ones. "
                     "All edge endpoints must appear in selected_papers. "
-                    "Occasionally include papers that synthesize 2+ prerequisite works. "
-                    "Prefer a trail depth of at least 3 levels when possible. "
-                    "No more than 2 root paper nodes with no prerequsities. "
                     "Return ONLY JSON with format "
                     '{"selected_papers":["W..."],"edges":[{"from":"W...","to":"W..."}]}.'
                 )

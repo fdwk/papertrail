@@ -124,7 +124,7 @@ export function TrailGenerating({ topic, stage, stageMessage, papers }: TrailGen
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 overflow-y-auto px-6 pb-8 pt-2">
+      <div className="relative z-10 flex-1 overflow-y-auto no-scrollbar px-6 pb-8 pt-2">
         <div className="mx-auto w-full max-w-5xl">
           {papers.length === 0 ? (
             <div className="flex h-[42vh] items-center justify-center rounded-3xl border border-border/60 bg-card/50 px-8 text-center backdrop-blur-sm">

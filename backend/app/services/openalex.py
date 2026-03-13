@@ -133,7 +133,7 @@ def search_by_title(title: str, authors_hint: str | None = None) -> dict[str, An
         "/works",
         params={
             "search": query,
-            "per_page": 3,
+            "per_page": 5,
         },
     )
     results = data.get("results") or []
@@ -188,7 +188,7 @@ async def async_search_by_title(title: str, authors_hint: str | None = None) -> 
         "/works",
         params={
             "search": query,
-            "per_page": 3,
+            "per_page": 5,
         },
     )
     results = data.get("results") or []

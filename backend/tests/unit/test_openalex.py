@@ -34,7 +34,8 @@ def test_search_by_title_returns_best_match(monkeypatch: pytest.MonkeyPatch) -> 
     def fake_get(path: str, params: dict | None = None) -> dict:
         assert path == "/works"
         assert params is not None
-        assert params["per_page"] == 3
+        # We ask OpenAlex for a small page size; exact value is part of the contract.
+        assert params["per_page"] == 5
         return {
             "results": [
                 {
