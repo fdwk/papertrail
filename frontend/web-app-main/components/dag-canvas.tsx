@@ -9,6 +9,7 @@ import {
   useNodesState,
   useEdgesState,
   BackgroundVariant,
+  type Node,
   type NodeTypes,
   ReactFlowProvider,
   useReactFlow,
@@ -161,6 +162,7 @@ function DAGCanvasInner({
   const readCount = trail.nodes.filter((n) => n.paper.isRead).length
   const totalCount = trail.nodes.length
   const starCount = trail.nodes.filter((n) => n.paper.isStarred).length
+  const entryCount = trail.nodes.filter((n) => n.dependencies.length === 0).length
   const progress = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0
   const remainingPapers = totalCount - readCount
   const estimatedMinutes = remainingPapers * AVG_MINUTES_PER_PAPER
@@ -175,6 +177,19 @@ function DAGCanvasInner({
     () => new Set(trail.nodes.filter((n) => n.paper.isRead).map((n) => n.id)),
     [trail.nodes]
   )
+  const dagNodeMap = useMemo(
+    () => new Map(trail.nodes.map((node) => [node.id, node])),
+    [trail.nodes]
+  )
+  const layoutKey = useMemo(
+    () =>
+      trail.nodes
+        .map((node) => `${node.id}:${[...node.dependencies].sort().join(",")}`)
+        .sort()
+        .join("|"),
+    [trail.nodes]
+  )
+  const fitViewPadding = totalCount > 10 || entryCount > 2 ? 0.36 : 0.26
 
   // Trail completion celebration
   useEffect(() => {
@@ -258,47 +273,70 @@ function DAGCanvasInner({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [topoOrder])
 
-  const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    const { nodes: rawNodes, edges: rawEdges } = getLayoutedElements(trail.nodes)
-    const enrichedNodes = rawNodes.map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        onToggleRead,
-        onSelectNode: handleSelectNode,
-        isSelected: node.id === selectedNodeId,
-        isFrontier: frontier.has(node.id),
-        focusMode,
-        depth: depthMap.get(node.id) ?? 1,
-      },
-    }))
-    return { layoutedNodes: enrichedNodes, layoutedEdges: rawEdges }
-  }, [trail.nodes, onToggleRead, handleSelectNode, selectedNodeId, frontier, focusMode, depthMap])
+  const { nodes: baseLayoutNodes, edges: baseLayoutEdges } = useMemo(
+    () => getLayoutedElements(trail.nodes),
+    [layoutKey]
+  )
+  const [nodes, setNodes, onNodesChange] = useNodesState(baseLayoutNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(baseLayoutEdges)
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
+  const hydrateNode = useCallback(
+    (node: Node) => {
+      const dagNode = dagNodeMap.get(node.id)
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          paper: dagNode?.paper ?? node.data.paper,
+          nodeId: node.id,
+          onToggleRead,
+          onSelectNode: handleSelectNode,
+          isSelected: node.id === selectedNodeId,
+          isFrontier: frontier.has(node.id),
+          focusMode,
+          depth: depthMap.get(node.id) ?? 1,
+        },
+      }
+    },
+    [
+      dagNodeMap,
+      onToggleRead,
+      handleSelectNode,
+      selectedNodeId,
+      frontier,
+      focusMode,
+      depthMap,
+    ]
+  )
 
   useEffect(() => {
-    setNodes(layoutedNodes)
-    setEdges(layoutedEdges)
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges])
+    setNodes(baseLayoutNodes)
+    setEdges(baseLayoutEdges)
+  }, [baseLayoutNodes, baseLayoutEdges, setNodes, setEdges])
+
+  useEffect(() => {
+    setNodes((currentNodes) => currentNodes.map(hydrateNode))
+  }, [hydrateNode, setNodes])
 
   // Auto-center on selected node when navigating with keyboard
   useEffect(() => {
     if (!selectedNodeId) return
-    const node = layoutedNodes.find((n) => n.id === selectedNodeId)
+    const node = nodes.find((n) => n.id === selectedNodeId)
     if (node?.position) {
       setCenter(node.position.x + 140, node.position.y + 50, {
         zoom: 1,
         duration: 300,
       })
     }
-  }, [selectedNodeId, layoutedNodes, setCenter])
+  }, [selectedNodeId, nodes, setCenter])
 
   useEffect(() => {
-    const t = setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 80)
+    const t = setTimeout(
+      () => fitView({ padding: fitViewPadding, duration: 400 }),
+      80
+    )
     return () => clearTimeout(t)
-  }, [trail.id, fitView])
+  }, [layoutKey, fitView, fitViewPadding])
 
   // Edge styling with focus-mode dimming
   const styledEdges = useMemo(() => {
@@ -364,6 +402,18 @@ function DAGCanvasInner({
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>{totalCount} papers</span>
               <span className="text-border">|</span>
+              {entryCount > 1 && (
+                <>
+                  <span>{entryCount} entry points</span>
+                  <span className="text-border">|</span>
+                </>
+              )}
+              {frontier.size > 0 && (
+                <>
+                  <span>{frontier.size} ready next</span>
+                  <span className="text-border">|</span>
+                </>
+              )}
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {readingTime}{progress < 100 ? " left" : ""}
@@ -459,11 +509,12 @@ function DAGCanvasInner({
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.25 }}
+          fitViewOptions={{ padding: fitViewPadding }}
           minZoom={0.15}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
           className="bg-background"
+          onlyRenderVisibleElements
           nodesDraggable
           nodesConnectable={false}
           elementsSelectable

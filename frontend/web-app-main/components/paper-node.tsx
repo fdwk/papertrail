@@ -53,7 +53,7 @@ function PaperNodeComponent({ data }: NodeProps) {
     <div
       onClick={handleClick}
       className={cn(
-        "group relative w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
+        "group relative h-[172px] w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
         "hover:shadow-xl",
         isSelected && !paper.isRead &&
           "border-foreground/30 bg-card shadow-lg shadow-foreground/5",
@@ -80,7 +80,7 @@ function PaperNodeComponent({ data }: NodeProps) {
         </span>
       )}
 
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex h-full items-start gap-3 p-4">
         {/* Read/unread indicator */}
         <button
           onClick={handleToggleRead}
@@ -100,10 +100,10 @@ function PaperNodeComponent({ data }: NodeProps) {
         </button>
 
         {/* Paper info */}
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
           <h3
             className={cn(
-              "text-sm font-semibold leading-snug",
+              "line-clamp-2 text-sm font-semibold leading-snug",
               paper.isRead ? "text-primary" : "text-card-foreground"
             )}
           >
@@ -121,7 +121,7 @@ function PaperNodeComponent({ data }: NodeProps) {
             )}
           </p>
           {paper.abstract && (
-            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground/70">
+            <p className="mt-1.5 line-clamp-3 text-[11px] leading-snug text-muted-foreground/70">
               {truncateAbstract(paper.abstract)}
             </p>
           )}

@@ -1,11 +1,13 @@
 """Trails API: list (lightweight) and detail (with graph)."""
 from __future__ import annotations
 
+import json
+import logging
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from .auth import require_user
@@ -17,8 +19,14 @@ from .repositories.trails import (
     list_trails_for_user as list_trails_for_user_db,
 )
 from .schemas import CreateTrailIn, TrailDetailOut, TrailSummaryOut
+from .services.trail_generator import (
+    TrailGenerationError,
+    generate_trail,
+    generate_trail_stream,
+)
 
 router = APIRouter(prefix="/trails", tags=["trails"])
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=list[TrailSummaryOut])
 def list_trails_from_db(
@@ -35,8 +43,35 @@ def create_trail(
     user_id: Annotated[uuid.UUID, Depends(require_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TrailSummaryOut:
-    """Create a new trail for the user with a random graph of 3-4 papers from the DB."""
-    return create_trail_with_random_graph_db(db, user_id, body.topic)
+    """Create a new trail via OpenAlex + GPT generation; fallback to random DB graph."""
+    try:
+        return generate_trail(db, user_id, body.topic, body.size)
+    except TrailGenerationError as exc:
+        logger.warning("Trail generation failed, using random fallback: %s", exc)
+        return create_trail_with_random_graph_db(db, user_id, body.topic)
+
+
+@router.post("/stream")
+async def create_trail_stream(
+    body: CreateTrailIn,
+    user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream trail generation progress via SSE."""
+
+    async def event_generator():
+        async for event in generate_trail_stream(db, user_id, body.topic, body.size):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{trail_id}", response_model=TrailDetailOut)

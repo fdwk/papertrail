@@ -3,29 +3,38 @@ import type { Node, Edge } from "@xyflow/react"
 import type { DAGNode } from "./types"
 
 const NODE_WIDTH = 280
-const NODE_HEIGHT = 140
+const NODE_HEIGHT = 172
+
+function getGraphConfig(dagNodes: DAGNode[]) {
+  const rootCount = dagNodes.filter((n) => n.dependencies.length === 0).length
+  const wide = dagNodes.length >= 10 || rootCount >= 3
+
+  return {
+    rankdir: "TB" as const,
+    ranker: dagNodes.length >= 12 ? "tight-tree" : "network-simplex",
+    align: "UL" as const,
+    nodesep: wide ? 120 : 88,
+    ranksep: dagNodes.length >= 8 ? 196 : 168,
+    edgesep: wide ? 72 : 56,
+    marginx: 48,
+    marginy: 48,
+  }
+}
 
 export function getLayoutedElements(dagNodes: DAGNode[]) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({
-    rankdir: "TB",
-    nodesep: 80,
-    ranksep: 160,
-    edgesep: 50,
-    marginx: 50,
-    marginy: 50,
-  })
+  g.setGraph(getGraphConfig(dagNodes))
 
-  // Add nodes
   for (const dagNode of dagNodes) {
     g.setNode(dagNode.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
   }
 
-  // Add edges
   const edges: Edge[] = []
+
   for (const dagNode of dagNodes) {
     for (const depId of dagNode.dependencies) {
+      g.setEdge(depId, dagNode.id, { weight: 2, minlen: 1 })
       edges.push({
         id: `e-${depId}-${dagNode.id}`,
         source: depId,
@@ -37,20 +46,16 @@ export function getLayoutedElements(dagNodes: DAGNode[]) {
     }
   }
 
-  for (const edge of edges) {
-    g.setEdge(edge.source, edge.target)
-  }
-
   dagre.layout(g)
 
   const nodes: Node[] = dagNodes.map((dagNode) => {
-    const nodeWithPosition = g.node(dagNode.id)
+    const pos = g.node(dagNode.id)
     return {
       id: dagNode.id,
       type: "paperNode",
       position: {
-        x: nodeWithPosition.x - NODE_WIDTH / 2,
-        y: nodeWithPosition.y - NODE_HEIGHT / 2,
+        x: pos.x - NODE_WIDTH / 2,
+        y: pos.y - NODE_HEIGHT / 2,
       },
       data: {
         paper: dagNode.paper,

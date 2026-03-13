@@ -7,3 +7,6 @@ __pycache__/
 **/*.env
 **/*.env.*
 **/.env.prod
+
+.openai_audit/
+.py_test_cache/

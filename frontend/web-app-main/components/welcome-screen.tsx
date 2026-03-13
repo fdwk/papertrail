@@ -15,13 +15,20 @@ import {
 import { ThemeToggle } from "./theme-toggle"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import type { TrailSummary } from "@/lib/types"
+import type { TrailSize, TrailSummary } from "@/lib/types"
 
 interface WelcomeScreenProps {
-  onCreateTrail: (topic: string) => void
+  onCreateTrail: (topic: string, size: TrailSize) => Promise<void> | void
   onSelectTrail?: (id: string) => void
   recentTrails?: TrailSummary[]
+  isCreating?: boolean
 }
+
+const trailSizes: { value: TrailSize; label: string; blurb: string; count: string }[] = [
+  { value: "small", label: "Small", blurb: "Quick path", count: "4-6 papers" },
+  { value: "medium", label: "Medium", blurb: "Balanced", count: "6-10 papers" },
+  { value: "large", label: "Large", blurb: "Deep dive", count: "10-14 papers" },
+]
 
 const trendingTopics = [
   { label: "Transformer Architecture", papers: 142 },
@@ -46,14 +53,16 @@ export function WelcomeScreen({
   onCreateTrail,
   onSelectTrail,
   recentTrails = [],
+  isCreating = false,
 }: WelcomeScreenProps) {
   const [topic, setTopic] = useState("")
+  const [trailSize, setTrailSize] = useState<TrailSize>("medium")
   const greeting = useMemo(() => getGreeting(), [])
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (topic.trim()) {
-      onCreateTrail(topic.trim())
+    if (topic.trim() && !isCreating) {
+      await onCreateTrail(topic.trim(), trailSize)
       setTopic("")
     }
   }
@@ -99,21 +108,83 @@ export function WelcomeScreen({
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
+            disabled={isCreating}
             placeholder="e.g., Transformer Architecture, Reinforcement Learning..."
             className="w-full rounded-2xl border border-border bg-card px-5 py-4 pr-14 text-sm text-foreground shadow-sm shadow-black/[0.03] placeholder:text-muted-foreground/50 transition-all focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:shadow-md focus:shadow-primary/[0.04]"
           />
           <button
             type="submit"
-            disabled={!topic.trim()}
+            disabled={!topic.trim() || isCreating}
             className="absolute right-2.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-all disabled:opacity-25 hover:bg-primary/90 active:scale-95"
             aria-label="Create trail"
           >
             <ArrowRight className="h-4 w-4" />
           </button>
         </form>
+        <div className="animate-fade-up delay-4 mt-4">
+          <div className="mb-2 flex items-center justify-center gap-1.5">
+            <Sparkles className="h-3 w-3 text-muted-foreground/50" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              Trail Size
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {trailSizes.map((size) => (
+              <button
+                key={size.value}
+                type="button"
+                onClick={() => setTrailSize(size.value)}
+                disabled={isCreating}
+                className={cn(
+                  "group rounded-2xl border px-3 py-3 text-left backdrop-blur-sm transition-all duration-200",
+                  trailSize === size.value
+                    ? "border-primary/25 bg-primary/[0.06] text-foreground shadow-sm shadow-primary/[0.08]"
+                    : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/20 hover:bg-card hover:text-foreground",
+                )}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold">{size.label}</div>
+                  <div
+                    className={cn(
+                      "h-2.5 w-2.5 rounded-full border transition-colors",
+                      trailSize === size.value
+                        ? "border-primary/60 bg-primary"
+                        : "border-border bg-background group-hover:border-primary/40",
+                    )}
+                  />
+                </div>
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    trailSize === size.value
+                      ? "text-foreground/80"
+                      : "text-muted-foreground/70",
+                  )}
+                >
+                  {size.blurb}
+                </div>
+                <div
+                  className={cn(
+                    "mt-1 text-[10px] uppercase tracking-[0.16em]",
+                    trailSize === size.value
+                      ? "text-primary/80"
+                      : "text-muted-foreground/45",
+                  )}
+                >
+                  {size.count}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        {isCreating && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Generating a {trailSize} trail...
+          </p>
+        )}
 
         {/* Trending topics */}
-        <div className="animate-fade-up delay-4 mt-5">
+        <div className="animate-fade-up delay-5 mt-5">
           <div className="mb-2.5 flex items-center justify-center gap-1.5">
             <TrendingUp className="h-3 w-3 text-muted-foreground/50" />
             <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
@@ -124,7 +195,8 @@ export function WelcomeScreen({
             {trendingTopics.map((t) => (
               <button
                 key={t.label}
-                onClick={() => onCreateTrail(t.label)}
+                onClick={() => { void onCreateTrail(t.label, trailSize) }}
+                disabled={isCreating}
                 className="group flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground active:scale-[0.97]"
               >
                 <span>{t.label}</span>
@@ -138,7 +210,7 @@ export function WelcomeScreen({
 
         {/* Continue reading */}
         {hasRecent && (
-          <div className="animate-fade-up delay-5 mt-10">
+          <div className="animate-fade-up delay-6 mt-10">
             <div className="mb-3 flex items-center justify-center gap-1.5">
               <Clock className="h-3 w-3 text-muted-foreground/50" />
               <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
@@ -185,10 +257,10 @@ export function WelcomeScreen({
         )}
 
         {/* Thin divider */}
-        <div className={cn("animate-fade-up mx-auto w-12 border-t border-border/60", hasRecent ? "delay-6 mt-8" : "delay-5 mt-12")} />
+        <div className={cn("animate-fade-up mx-auto w-12 border-t border-border/60", hasRecent ? "delay-7 mt-8" : "delay-6 mt-12")} />
 
         {/* Features */}
-        <div className={cn("animate-fade-up grid grid-cols-3 gap-3", hasRecent ? "delay-6 mt-8" : "delay-5 mt-8")}>
+        <div className={cn("animate-fade-up grid grid-cols-3 gap-3", hasRecent ? "delay-7 mt-8" : "delay-6 mt-8")}>
           {[
             {
               icon: GitBranch,
@@ -222,7 +294,7 @@ export function WelcomeScreen({
         </div>
 
         {/* Upgrade prompt */}
-        <div className={cn("animate-fade-up mt-8 flex justify-center", hasRecent ? "delay-7" : "delay-6")}>
+        <div className={cn("animate-fade-up mt-8 flex justify-center", hasRecent ? "delay-8" : "delay-7")}>
           <Link
             href="/upgrade"
             className="group flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-4 py-2 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card/80"

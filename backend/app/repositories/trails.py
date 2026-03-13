@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Paper, PaperGraphEdge, Trail, UserPaper
@@ -206,6 +207,142 @@ def create_trail_with_random_graph(
         createdAt=trail.date_created.strftime("%Y-%m-%d"),
         readCount=read_count,
         totalCount=len(papers),
+    )
+
+
+def create_trail_from_generated_data(
+    db: Session,
+    user_id: uuid.UUID,
+    topic: str,
+    papers_data: list[dict],
+    edges_data: list[dict],
+) -> TrailSummaryOut:
+    """Persist a generated trail (papers + DAG edges) and return TrailSummaryOut."""
+    trail = Trail(user_id=user_id, topic=topic)
+    db.add(trail)
+    db.flush()
+
+    persisted_ids: list[uuid.UUID] = []
+    external_to_internal: dict[str, uuid.UUID] = {}
+
+    for raw in papers_data:
+        openalex_id = (raw.get("openalex_id") or "").strip() or None
+        doi = (raw.get("doi") or "").strip() or None
+        title = (raw.get("title") or "").strip()
+        if not title:
+            continue
+
+        paper: Paper | None = None
+        if openalex_id:
+            paper = db.query(Paper).filter(Paper.openalex_id == openalex_id).first()
+        if paper is None and doi:
+            paper = db.query(Paper).filter(Paper.doi == doi).first()
+        if paper is None:
+            year = int(raw.get("year") or 0)
+            safe_year = year if 1500 <= year <= 3000 else 1970
+            paper = Paper(
+                title=title,
+                author=", ".join(raw.get("authors") or []),
+                abstract=(raw.get("abstract") or "").strip() or None,
+                doi=doi,
+                openalex_id=openalex_id,
+                date=datetime(safe_year, 1, 1),
+                url=(raw.get("url") or "").strip() or None,
+            )
+            db.add(paper)
+            db.flush()
+        else:
+            paper.title = title or paper.title
+            if raw.get("authors"):
+                paper.author = ", ".join(raw.get("authors"))
+            if raw.get("abstract"):
+                paper.abstract = (raw.get("abstract") or "").strip()
+            if openalex_id and not paper.openalex_id:
+                paper.openalex_id = openalex_id
+            if doi and not paper.doi:
+                paper.doi = doi
+            if raw.get("url"):
+                paper.url = (raw.get("url") or "").strip()
+
+        persisted_ids.append(paper.id)
+        if openalex_id:
+            external_to_internal[openalex_id] = paper.id
+
+    seen_pairs: set[tuple[uuid.UUID, uuid.UUID | None]] = set()
+    has_outgoing: set[uuid.UUID] = set()
+    for edge in edges_data:
+        from_external = (edge.get("from") or "").strip()
+        to_external = (edge.get("to") or "").strip()
+        from_id = external_to_internal.get(from_external)
+        to_id = external_to_internal.get(to_external)
+        if not from_id or not to_id or from_id == to_id:
+            continue
+        pair = (from_id, to_id)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        has_outgoing.add(from_id)
+        db.add(
+            PaperGraphEdge(
+                paper_id=from_id,
+                trail_id=trail.id,
+                next_node_id=to_id,
+            )
+        )
+
+    # Ensure every paper appears in the graph detail response.
+    for paper_id in persisted_ids:
+        if paper_id in has_outgoing:
+            continue
+        pair = (paper_id, None)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        db.add(
+            PaperGraphEdge(
+                paper_id=paper_id,
+                trail_id=trail.id,
+                next_node_id=None,
+            )
+        )
+
+    existing = {
+        (up.user_id, up.paper_id)
+        for up in db.query(UserPaper).filter(
+            UserPaper.user_id == user_id,
+            UserPaper.paper_id.in_(persisted_ids),
+        ).all()
+    }
+    for pid in persisted_ids:
+        if (user_id, pid) not in existing:
+            db.add(
+                UserPaper(
+                    user_id=user_id,
+                    paper_id=pid,
+                    has_read=False,
+                    note=None,
+                    is_starred=False,
+                )
+            )
+
+    db.commit()
+
+    read_count = (
+        db.query(UserPaper)
+        .filter(
+            UserPaper.user_id == user_id,
+            UserPaper.paper_id.in_(persisted_ids),
+            UserPaper.has_read.is_(True),
+        )
+        .count()
+    )
+
+    return TrailSummaryOut(
+        id=str(trail.id),
+        topic=trail.topic,
+        createdAt=trail.date_created.strftime("%Y-%m-%d"),
+        readCount=read_count,
+        totalCount=len(persisted_ids),
     )
 
 
