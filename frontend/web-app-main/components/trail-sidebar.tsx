@@ -20,6 +20,16 @@ import {
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { UserMenu } from "@/components/user-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface TrailSidebarProps {
   trails: Trail[]
@@ -104,6 +114,7 @@ export function TrailSidebar({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [deleteTrailId, setDeleteTrailId] = useState<string | null>(null)
   const { isAuthenticated } = useAuth()
 
   const filteredTrails = useMemo(() => {
@@ -112,6 +123,7 @@ export function TrailSidebar({
     return trails.filter((t) => t.topic.toLowerCase().includes(q))
   }, [trails, searchQuery])
 
+  const trailToDelete = deleteTrailId ? filteredTrails.find((t) => t.id === deleteTrailId) : null
   const showSearch = trails.length >= 4
 
   return (
@@ -245,12 +257,20 @@ export function TrailSidebar({
               </div>
             ) : null
           ) : (
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-1">
               {filteredTrails.map((trail) => {
                 const progress = getTrailProgress(trail)
                 const isActive = trail.id === activeTrailId
                 return (
-                  <li key={trail.id} className="flex w-full items-stretch gap-0">
+                  <li
+                    key={trail.id}
+                    className={cn(
+                      "group/row flex w-full items-stretch gap-0 rounded-xl transition-[background-color,border-color] duration-150",
+                      isActive
+                        ? "bg-sidebar-accent"
+                        : "hover:bg-sidebar-accent/40"
+                    )}
+                  >
                     <button
                       onClick={() => {
                         onSelectTrail(trail.id)
@@ -258,20 +278,20 @@ export function TrailSidebar({
                       }}
                       title={collapsed ? trail.topic : undefined}
                       className={cn(
-                        "group relative flex min-w-0 flex-1 items-center text-left text-sm transition-all",
+                        "relative flex min-w-0 flex-1 items-center text-left text-sm outline-none transition-colors duration-150",
                         collapsed
-                          ? "justify-center rounded-lg px-0 py-2"
-                          : "gap-2 rounded-l-xl rounded-r-none px-3 py-2.5",
+                          ? "justify-center rounded-lg px-0 py-2.5"
+                          : "gap-2.5 rounded-l-xl rounded-r-none px-3 py-2.5",
                         isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          ? "text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/85 hover:text-sidebar-foreground"
                       )}
                     >
-                      {/* Left accent bar */}
+                      {/* Left accent bar — shows when active or on row hover */}
                       <span
                         className={cn(
-                          "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-all duration-200",
-                          isActive ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                          "absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-150",
+                          isActive ? "opacity-100" : "opacity-0 group-hover/row:opacity-60"
                         )}
                       />
 
@@ -281,10 +301,10 @@ export function TrailSidebar({
                         <>
                           <ChevronRight
                             className={cn(
-                              "h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200",
+                              "h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150",
                               isActive
                                 ? "text-primary rotate-90"
-                                : "text-muted-foreground/40 group-hover:rotate-45 group-hover:text-muted-foreground/60"
+                                : "text-muted-foreground/50 group-hover/row:rotate-45 group-hover/row:text-muted-foreground/70"
                             )}
                           />
                           <span className="min-w-0 flex-1 truncate font-medium">
@@ -296,14 +316,15 @@ export function TrailSidebar({
                     {!collapsed && isActive && onDeleteTrail && (
                       <button
                         type="button"
-                        onClick={() => {
-                          onDeleteTrail(trail.id)
-                          setMobileOpen(false)
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleteTrailId(trail.id)
                         }}
                         title="Delete trail"
                         className={cn(
-                          "flex-shrink-0 border-l border-sidebar-border/50 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-1 focus:ring-destructive",
-                          "bg-sidebar-accent"
+                          "flex-shrink-0 border-l border-sidebar-border/40 px-2 py-1.5 text-muted-foreground/70 transition-opacity duration-150",
+                          "hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20",
+                          "focus:outline-none focus:ring-1 focus:ring-destructive/50 focus:ring-inset"
                         )}
                         aria-label={`Delete trail ${trail.topic}`}
                       >
@@ -311,12 +332,7 @@ export function TrailSidebar({
                       </button>
                     )}
                     {!collapsed && (
-                      <span
-                        className={cn(
-                          "flex flex-shrink-0 items-center rounded-r-xl border-l border-sidebar-border/50 pr-2 pl-1",
-                          isActive ? "bg-sidebar-accent" : "bg-transparent"
-                        )}
-                      >
+                      <span className="flex flex-shrink-0 items-center rounded-r-xl pl-2 pr-2.5 py-1">
                         <ProgressRing progress={progress} />
                       </span>
                     )}
@@ -354,6 +370,43 @@ export function TrailSidebar({
         {/* Footer */}
         <SidebarFooter trails={trails} collapsed={collapsed} />
       </aside>
+
+      {/* Delete trail confirmation */}
+      <AlertDialog
+        open={deleteTrailId !== null}
+        onOpenChange={(open) => !open && setDeleteTrailId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete trail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {trailToDelete ? (
+                <>
+                  &ldquo;{trailToDelete.topic}&rdquo; and all its papers will be removed. This
+                  cannot be undone.
+                </>
+              ) : (
+                "This trail will be permanently removed. This cannot be undone."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTrailId && onDeleteTrail) {
+                  onDeleteTrail(deleteTrailId)
+                  setMobileOpen(false)
+                }
+                setDeleteTrailId(null)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

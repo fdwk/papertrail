@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, User } from "lucide-react"
+import { FileText, LogOut, User } from "lucide-react"
 
 export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { user, logout } = useAuth()
@@ -62,6 +62,14 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         >
           <User className="h-4 w-4" />
           <span>My Trails</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => router.push("/papers")}
+          className="cursor-pointer"
+        >
+          <FileText className="h-4 w-4" />
+          <span>View Papers</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
