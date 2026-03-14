@@ -4,7 +4,7 @@ import { memo, useCallback } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { Paper } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Check, Circle, Star } from "lucide-react"
+import { Check, Circle, Plus, Star, X } from "lucide-react"
 
 interface PaperNodeData {
   paper: Paper
@@ -15,6 +15,12 @@ interface PaperNodeData {
   depth?: number
   onToggleRead?: (nodeId: string) => void
   onSelectNode?: (nodeId: string) => void
+  isProposed?: boolean
+  isExpansionSource?: boolean
+  isSelectableInExpansion?: boolean
+  isSelectedInExpansion?: boolean
+  onToggleSelectedInExpansion?: (nodeId: string) => void
+  onRequestExpand?: (nodeId: string) => void
   [key: string]: unknown
 }
 
@@ -33,6 +39,12 @@ function PaperNodeComponent({ data }: NodeProps) {
     depth,
     onToggleRead,
     onSelectNode,
+    isProposed,
+    isExpansionSource,
+    isSelectableInExpansion,
+    isSelectedInExpansion,
+    onToggleSelectedInExpansion,
+    onRequestExpand,
   } = data as PaperNodeData
 
   const handleToggleRead = useCallback(
@@ -47,7 +59,24 @@ function PaperNodeComponent({ data }: NodeProps) {
     onSelectNode?.(nodeId)
   }, [onSelectNode, nodeId])
 
-  const dimmed = focusMode && paper.isRead && !isSelected
+  const handleToggleSelectedInExpansion = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      onToggleSelectedInExpansion?.(nodeId)
+    },
+    [onToggleSelectedInExpansion, nodeId],
+  )
+
+  const handleRequestExpand = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!isSelectableInExpansion) return
+      onRequestExpand?.(nodeId)
+    },
+    [isSelectableInExpansion, onRequestExpand, nodeId],
+  )
+
+  const dimmed = focusMode && paper.isRead && !isSelected && !isProposed
 
   return (
     <div
@@ -55,16 +84,24 @@ function PaperNodeComponent({ data }: NodeProps) {
       className={cn(
         "group relative h-[172px] w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
         "hover:shadow-xl",
-        isSelected && !paper.isRead &&
-          "border-foreground/30 bg-card shadow-lg shadow-foreground/5",
-        isSelected && paper.isRead &&
-          "border-primary/60 bg-primary/5 shadow-lg shadow-primary/10",
-        !isSelected && paper.isRead &&
-          "border-primary/30 bg-primary/5 shadow-md shadow-primary/5",
-        !isSelected && !paper.isRead &&
-          "border-border bg-card shadow-md hover:border-foreground/20",
+        isProposed
+          ? cn(
+              "border-dashed border-amber-400/60 bg-amber-50/10 dark:bg-amber-950/20",
+              !isSelectedInExpansion && "opacity-40",
+            )
+          : [
+              isSelected && !paper.isRead &&
+                "border-foreground/30 bg-card shadow-lg shadow-foreground/5",
+              isSelected && paper.isRead &&
+                "border-primary/60 bg-primary/5 shadow-lg shadow-primary/10",
+              !isSelected && paper.isRead &&
+                "border-primary/30 bg-primary/5 shadow-md shadow-primary/5",
+              !isSelected && !paper.isRead &&
+                "border-border bg-card shadow-md hover:border-foreground/20",
+            ],
         dimmed && "focus-mode-dimmed",
-        focusMode && isFrontier && !paper.isRead && "animate-pulse-ring"
+        focusMode && isFrontier && !paper.isRead && !isProposed && "animate-pulse-ring",
+        isExpansionSource && "ring-2 ring-amber-400/60 ring-offset-2 ring-offset-background",
       )}
     >
       <Handle
@@ -73,26 +110,42 @@ function PaperNodeComponent({ data }: NodeProps) {
         className="!h-2.5 !w-2.5 !rounded-full !border-2 !border-background !bg-primary/50"
       />
 
-      {/* Depth badge */}
-      {depth != null && (
-        <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground shadow-sm ring-1 ring-border">
-          L{depth}
+      {/* Depth badge or NEW pill for proposed nodes */}
+      {isProposed ? (
+        <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-50 shadow-sm ring-1 ring-amber-400/80">
+          NEW
         </span>
+      ) : (
+        depth != null && (
+          <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground shadow-sm ring-1 ring-border">
+            L{depth}
+          </span>
+        )
       )}
 
       <div className="flex h-full items-start gap-3 p-4">
-        {/* Read/unread indicator */}
+        {/* Read/unread indicator (disabled for proposed nodes) */}
         <button
-          onClick={handleToggleRead}
+          onClick={isProposed ? (e) => e.stopPropagation() : handleToggleRead}
           className={cn(
             "mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200",
-            paper.isRead
-              ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
-              : "border-2 border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/10"
+            isProposed
+              ? "border border-amber-400/70 bg-amber-500/10 text-amber-500"
+              : paper.isRead
+                ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                : "border-2 border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/10",
           )}
-          aria-label={paper.isRead ? "Mark as unread" : "Mark as read"}
+          aria-label={
+            isProposed
+              ? "Proposed paper"
+              : paper.isRead
+                ? "Mark as unread"
+                : "Mark as read"
+          }
         >
-          {paper.isRead ? (
+          {isProposed ? (
+            <Circle className="h-2 w-2" />
+          ) : paper.isRead ? (
             <Check className="h-3 w-3" strokeWidth={3} />
           ) : (
             <Circle className="h-2 w-2 text-muted-foreground/30" />
@@ -104,7 +157,11 @@ function PaperNodeComponent({ data }: NodeProps) {
           <h3
             className={cn(
               "line-clamp-2 text-sm font-semibold leading-snug",
-              paper.isRead ? "text-primary" : "text-card-foreground"
+              isProposed
+                ? "text-amber-200 dark:text-amber-100"
+                : paper.isRead
+                  ? "text-primary"
+                  : "text-card-foreground",
             )}
           >
             {paper.title}
@@ -120,13 +177,58 @@ function PaperNodeComponent({ data }: NodeProps) {
               <Star className="ml-auto h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400" />
             )}
           </p>
-          {paper.abstract && (
+          {paper.abstract ? (
             <p className="mt-1.5 line-clamp-3 text-[11px] leading-snug text-muted-foreground/70">
               {truncateAbstract(paper.abstract)}
             </p>
-          )}
+          ) : isProposed ? (
+            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground/60">
+              No abstract available for this proposed paper.
+            </p>
+          ) : null}
         </div>
       </div>
+
+      {/* Expansion controls */}
+      {isProposed && isSelectableInExpansion && (
+        <button
+          onClick={handleToggleSelectedInExpansion}
+          className={cn(
+            "absolute bottom-2 right-2 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
+            isSelectedInExpansion
+              ? "border-emerald-500/80 bg-emerald-500/10 text-emerald-400"
+              : "border-border bg-background/80 text-muted-foreground hover:bg-muted/80",
+          )}
+        >
+          {isSelectedInExpansion ? (
+            <>
+              <Check className="h-3 w-3" />
+              Keep
+            </>
+          ) : (
+            <>
+              <X className="h-3 w-3" />
+              Skip
+            </>
+          )}
+        </button>
+      )}
+
+      {!isProposed && onRequestExpand && (
+        <button
+          onClick={handleRequestExpand}
+          className={cn(
+            "absolute bottom-2 right-2 hidden items-center gap-1 rounded-full border border-border bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm transition-all group-hover:flex",
+            !isSelectableInExpansion && "opacity-40 cursor-not-allowed",
+          )}
+          title={
+            isSelectableInExpansion ? "Expand from here" : "Finish current expansion first"
+          }
+        >
+          <Plus className="h-3 w-3" />
+          Expand
+        </button>
+      )}
 
       <Handle
         type="source"

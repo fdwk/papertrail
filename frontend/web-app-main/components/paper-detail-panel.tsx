@@ -21,6 +21,8 @@ interface PaperDetailPanelProps {
   onToggleRead: (nodeId: string) => void
   onToggleStar: (nodeId: string) => void
   onSaveNote: (nodeId: string, note: string) => void
+  onExpandFromHere?: (nodeId: string) => void
+  isExpansionDisabled?: boolean
 }
 
 export function PaperDetailPanel({
@@ -29,6 +31,8 @@ export function PaperDetailPanel({
   onToggleRead,
   onToggleStar,
   onSaveNote,
+  onExpandFromHere,
+  isExpansionDisabled,
 }: PaperDetailPanelProps) {
   const { paper } = node
   const [noteDraft, setNoteDraft] = useState(paper.note ?? "")
@@ -167,7 +171,7 @@ export function PaperDetailPanel({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 border-t border-border p-4">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border p-4">
         <button
           onClick={() => onToggleRead(node.id)}
           className={cn(
@@ -189,11 +193,32 @@ export function PaperDetailPanel({
             </>
           )}
         </button>
+        {onExpandFromHere && (
+          <button
+            type="button"
+            onClick={() => onExpandFromHere(node.id)}
+            disabled={isExpansionDisabled}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+              isExpansionDisabled
+                ? "cursor-not-allowed border-border/60 bg-muted text-muted-foreground"
+                : "border-amber-500/60 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15 dark:border-amber-400/60 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20",
+            )}
+            title={
+              isExpansionDisabled
+                ? "Finish or dismiss the current expansion to start a new one"
+                : "Propose a small expansion from this paper"
+            }
+          >
+            <ExternalLink className="h-4 w-4" />
+            Expand from here
+          </button>
+        )}
         <a
           href={paper.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
+          className="ml-auto flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
         >
           <ExternalLink className="h-4 w-4" />
           View

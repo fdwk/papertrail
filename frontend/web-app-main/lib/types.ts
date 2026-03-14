@@ -33,3 +33,18 @@ export interface TrailSummary {
   readCount?: number
   totalCount?: number
 }
+
+export type ExpansionStatus = "idle" | "loading" | "staged" | "confirming"
+
+export interface ExpansionEdge {
+  source: string
+  target: string
+}
+
+export interface ExpansionState {
+  status: ExpansionStatus
+  sourceNodeId: string
+  proposedNodes: DAGNode[]
+  proposedEdges: ExpansionEdge[]
+  selectedNodeIds: Set<string>
+}

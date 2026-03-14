@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Trail, TrailSize, TrailSummary } from "@/lib/types"
+import { Trail, TrailSize, TrailSummary, type ExpansionState } from "@/lib/types"
 import { TrailSidebar } from "@/components/trail-sidebar"
 import { DAGCanvas } from "@/components/dag-canvas"
 import { WelcomeScreen } from "@/components/welcome-screen"
@@ -45,6 +45,7 @@ export function TrailsApp() {
   const [trailDetailError, setTrailDetailError] = useState<string | null>(null)
   const [createTrailLoading, setCreateTrailLoading] = useState(false)
   const [generatingState, setGeneratingState] = useState<TrailGeneratingState | null>(null)
+  const [expansionState, setExpansionState] = useState<ExpansionState | null>(null)
 
   useEffect(() => {
     setActiveTrailId(routeTrailId)
@@ -85,11 +86,13 @@ export function TrailsApp() {
     if (!routeTrailId || !isAuthenticated) {
       setActiveTrail(null)
       setTrailDetailError(null)
+      setExpansionState(null)
       return
     }
     setTrailDetailLoading(true)
     setTrailDetailError(null)
     setActiveTrail(null)
+    setExpansionState(null)
     backendFetch<Trail>(`/trails/${routeTrailId}`)
       .then((res) => {
         if (res.ok && res.data) {
@@ -109,6 +112,7 @@ export function TrailsApp() {
   const handleNewTrail = useCallback(() => {
     setActiveTrailId(null)
     setActiveTrail(null)
+    setExpansionState(null)
     router.push("/trails")
   }, [router])
 
@@ -173,6 +177,7 @@ export function TrailsApp() {
       }
 
       setCreateTrailLoading(true)
+      setExpansionState(null)
       setGeneratingState({
         topic,
         size,
@@ -298,6 +303,7 @@ export function TrailsApp() {
   const handleSelectTrail = useCallback(
     (id: string) => {
       setActiveTrailId(id)
+      setExpansionState(null)
       router.push(`/trails?trail=${id}`)
     },
     [router]
@@ -410,6 +416,103 @@ export function TrailsApp() {
     })
   }, [])
 
+  const handleRequestExpandFromNode = useCallback(
+    async (nodeId: string) => {
+      if (!activeTrail || !routeTrailId) return
+      if (expansionState && expansionState.status !== "idle") return
+      setExpansionState({
+        status: "loading",
+        sourceNodeId: nodeId,
+        proposedNodes: [],
+        proposedEdges: [],
+        selectedNodeIds: new Set<string>(),
+      })
+      const res = await backendFetch<{
+        nodes: Trail["nodes"]
+        edges: { source: string; target: string }[]
+      }>(`/trails/${routeTrailId}/expand`, {
+        method: "POST",
+        body: JSON.stringify({ sourceNodeId: nodeId }),
+      })
+      if (!res.ok || !res.data) {
+        setExpansionState(null)
+        const msg =
+          (res.data as { detail?: string })?.detail ?? "Failed to propose expansion."
+        toast.error(msg)
+        return
+      }
+      const proposedNodes = res.data.nodes
+      const proposedEdges = res.data.edges
+      if (!Array.isArray(proposedNodes) || proposedNodes.length === 0) {
+        setExpansionState(null)
+        toast.message("No new papers to add here", {
+          description: "Try expanding from a different paper in this trail.",
+        })
+        return
+      }
+      setExpansionState({
+        status: "staged",
+        sourceNodeId: nodeId,
+        proposedNodes,
+        proposedEdges,
+        selectedNodeIds: new Set(proposedNodes.map((n) => n.id)),
+      })
+    },
+    [activeTrail, routeTrailId, expansionState],
+  )
+
+  const handleToggleSelectedInExpansion = useCallback((nodeId: string) => {
+    setExpansionState((prev) => {
+      if (!prev) return prev
+      const nextSelected = new Set(prev.selectedNodeIds)
+      if (nextSelected.has(nodeId)) {
+        nextSelected.delete(nodeId)
+      } else {
+        nextSelected.add(nodeId)
+      }
+      return { ...prev, selectedNodeIds: nextSelected }
+    })
+  }, [])
+
+  const handleDismissExpansion = useCallback(() => {
+    setExpansionState(null)
+  }, [])
+
+  const handleConfirmExpansion = useCallback(async () => {
+    if (!expansionState || !routeTrailId) return
+    const accepted = [...expansionState.selectedNodeIds]
+    if (accepted.length === 0) return
+    setExpansionState((prev) => (prev ? { ...prev, status: "confirming" } : prev))
+    const res = await backendFetch<Trail>(`/trails/${routeTrailId}/expand/confirm`, {
+      method: "POST",
+      body: JSON.stringify({
+        sourceNodeId: expansionState.sourceNodeId,
+        acceptedNodeIds: accepted,
+      }),
+    })
+    if (res.ok && res.data) {
+      setActiveTrail(res.data)
+      setExpansionState(null)
+      toast.success(
+        accepted.length === 1
+          ? "Added 1 paper to this trail."
+          : `Added ${accepted.length} papers to this trail.`,
+      )
+      // Refresh sidebar counts
+      backendFetch<TrailSummary[]>("/trails/").then((listRes) => {
+        if (listRes.ok && Array.isArray(listRes.data)) setTrails(listRes.data)
+      })
+    } else {
+      const msg =
+        (res.data as { detail?: string })?.detail ??
+        "Failed to apply expansion. Your trail is unchanged."
+      toast.error(msg)
+      setExpansionState((prev) =>
+        prev ? { ...prev, status: "staged" } : prev,
+      )
+    }
+  }, [expansionState, routeTrailId])
+
   return (
     <div className="flex h-dvh bg-background">
       <TrailSidebar
@@ -463,6 +566,11 @@ export function TrailsApp() {
             onToggleStar={handleToggleStar}
             onSaveNote={handleSaveNote}
             onBack={handleNewTrail}
+            expansionState={expansionState}
+            onRequestExpandFromNode={handleRequestExpandFromNode}
+            onConfirmExpansion={handleConfirmExpansion}
+            onDismissExpansion={handleDismissExpansion}
+            onToggleSelectedInExpansion={handleToggleSelectedInExpansion}
           />
         ) : (
           <WelcomeScreen

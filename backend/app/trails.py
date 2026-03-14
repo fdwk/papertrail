@@ -18,9 +18,18 @@ from .repositories.trails import (
     get_trail_detail as get_trail_detail_db,
     list_trails_for_user as list_trails_for_user_db,
 )
-from .schemas import CreateTrailIn, TrailDetailOut, TrailSummaryOut
+from .schemas import (
+    CreateTrailIn,
+    TrailDetailOut,
+    TrailExpansionConfirmIn,
+    TrailExpansionIn,
+    TrailExpansionProposalOut,
+    TrailSummaryOut,
+)
 from .services.trail_generator import (
     TrailGenerationError,
+    apply_expansion,
+    generate_expansion,
     generate_trail,
     generate_trail_stream,
 )
@@ -105,3 +114,64 @@ def delete_trail(
     if not delete_trail_db(db, tid, user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trail not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{trail_id}/expand",
+    response_model=TrailExpansionProposalOut,
+    status_code=status.HTTP_200_OK,
+)
+def propose_trail_expansion(
+    trail_id: str,
+    body: TrailExpansionIn,
+    user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TrailExpansionProposalOut:
+    """Propose an ephemeral expansion from a given node in a trail.
+
+    This does not modify the trail in the database; it simply returns a small
+    set of related papers and edges for the frontend to stage visually.
+    """
+    try:
+        tid = uuid.UUID(trail_id)
+        source_node_uuid = uuid.UUID(body.sourceNodeId)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid id format")
+
+    try:
+        return generate_expansion(db, user_id, tid, source_node_uuid)
+    except TrailGenerationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/{trail_id}/expand/confirm",
+    response_model=TrailDetailOut,
+    status_code=status.HTTP_200_OK,
+)
+def confirm_trail_expansion(
+    trail_id: str,
+    body: TrailExpansionConfirmIn,
+    user_id: Annotated[uuid.UUID, Depends(require_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TrailDetailOut:
+    """Persist an accepted expansion into the trail and return the updated graph."""
+    try:
+        tid = uuid.UUID(trail_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid trail id")
+
+    try:
+        detail = apply_expansion(db, user_id, tid, body)
+    except TrailGenerationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    if detail is None:
+        # Should not normally happen, but guard in case the repository returns None.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trail not found")
+    return detail
