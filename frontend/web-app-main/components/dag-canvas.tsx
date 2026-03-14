@@ -16,11 +16,12 @@ import {
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { toast } from "sonner"
-import { Trail, DAGNode } from "@/lib/types"
+import { Trail, DAGNode, type ExpansionState } from "@/lib/types"
 import { getLayoutedElements } from "@/lib/layout"
 import { PaperNode } from "./paper-node"
 import { PaperDetailPanel } from "./paper-detail-panel"
 import { ThemeToggle } from "./theme-toggle"
+import { ExpansionAcceptBar } from "./expansion-accept-bar"
 import {
   BookOpen,
   Clock,
@@ -40,6 +41,11 @@ interface DAGCanvasProps {
   onToggleStar: (nodeId: string) => void
   onSaveNote: (nodeId: string, note: string) => void
   onBack?: () => void
+  expansionState?: ExpansionState | null
+  onRequestExpandFromNode?: (nodeId: string) => void
+  onConfirmExpansion?: () => void
+  onDismissExpansion?: () => void
+  onToggleSelectedInExpansion?: (nodeId: string) => void
 }
 
 const nodeTypes: NodeTypes = {
@@ -80,8 +86,18 @@ function computeFrontier(dagNodes: DAGNode[]): Set<string> {
 }
 
 function computeDepths(dagNodes: DAGNode[]): Map<string, number> {
-  const nodeMap = new Map(dagNodes.map((n) => [n.id, n]))
   const depths = new Map<string, number>()
+  const children = new Map<string, string[]>()
+  const maxDepth = dagNodes.length
+
+  for (const node of dagNodes) {
+    for (const dep of node.dependencies) {
+      const list = children.get(dep) ?? []
+      list.push(node.id)
+      children.set(dep, list)
+    }
+  }
+
   const roots = dagNodes.filter((n) => n.dependencies.length === 0)
   const queue: { id: string; depth: number }[] = roots.map((r) => ({
     id: r.id,
@@ -90,12 +106,11 @@ function computeDepths(dagNodes: DAGNode[]): Map<string, number> {
 
   while (queue.length > 0) {
     const { id, depth } = queue.shift()!
+    if (depth > maxDepth) continue
     if (depths.has(id) && depths.get(id)! >= depth) continue
     depths.set(id, depth)
-    for (const node of dagNodes) {
-      if (node.dependencies.includes(id)) {
-        queue.push({ id: node.id, depth: depth + 1 })
-      }
+    for (const childId of children.get(id) ?? []) {
+      queue.push({ id: childId, depth: depth + 1 })
     }
   }
 
@@ -148,6 +163,11 @@ function DAGCanvasInner({
   onToggleStar,
   onSaveNote,
   onBack,
+  expansionState,
+  onRequestExpandFromNode,
+  onConfirmExpansion,
+  onDismissExpansion,
+  onToggleSelectedInExpansion,
 }: DAGCanvasProps) {
   const { fitView, setCenter } = useReactFlow()
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -179,7 +199,7 @@ function DAGCanvasInner({
   )
   const dagNodeMap = useMemo(
     () => new Map(trail.nodes.map((node) => [node.id, node])),
-    [trail.nodes]
+    [trail.nodes],
   )
   const layoutKey = useMemo(
     () =>
@@ -187,7 +207,7 @@ function DAGCanvasInner({
         .map((node) => `${node.id}:${[...node.dependencies].sort().join(",")}`)
         .sort()
         .join("|"),
-    [trail.nodes]
+    [trail.nodes],
   )
   const fitViewPadding = totalCount > 10 || entryCount > 2 ? 0.36 : 0.26
 
@@ -273,9 +293,31 @@ function DAGCanvasInner({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [topoOrder])
 
+  const allDagNodes: DAGNode[] = useMemo(() => {
+    if (!expansionState || expansionState.proposedNodes.length === 0) {
+      return trail.nodes
+    }
+    return [...trail.nodes, ...expansionState.proposedNodes]
+  }, [trail.nodes, expansionState])
+
+  const expansionProposedIds = useMemo(
+    () =>
+      new Set(
+        expansionState?.proposedNodes.map((n) => n.id) ?? [],
+      ),
+    [expansionState],
+  )
+
+  const expansionSelectedIds = useMemo(
+    () => expansionState?.selectedNodeIds ?? new Set<string>(),
+    [expansionState],
+  )
+
+  const expansionSourceId = expansionState?.sourceNodeId ?? null
+
   const { nodes: baseLayoutNodes, edges: baseLayoutEdges } = useMemo(
-    () => getLayoutedElements(trail.nodes),
-    [layoutKey]
+    () => getLayoutedElements(allDagNodes),
+    [allDagNodes, layoutKey],
   )
   const [nodes, setNodes, onNodesChange] = useNodesState(baseLayoutNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseLayoutEdges)
@@ -283,6 +325,12 @@ function DAGCanvasInner({
   const hydrateNode = useCallback(
     (node: Node) => {
       const dagNode = dagNodeMap.get(node.id)
+      const isProposed = expansionProposedIds.has(node.id)
+      const isExpansionSource = expansionSourceId === node.id
+      const isSelectableInExpansion = !!expansionState && isProposed
+      const isSelectedInExpansion = isProposed
+        ? expansionSelectedIds.has(node.id)
+        : false
       return {
         ...node,
         data: {
@@ -295,6 +343,15 @@ function DAGCanvasInner({
           isFrontier: frontier.has(node.id),
           focusMode,
           depth: depthMap.get(node.id) ?? 1,
+          isProposed,
+          isExpansionSource,
+          isSelectableInExpansion,
+          isSelectedInExpansion,
+          onToggleSelectedInExpansion:
+            isSelectableInExpansion && onToggleSelectedInExpansion
+              ? onToggleSelectedInExpansion
+              : undefined,
+          onRequestExpand: onRequestExpandFromNode,
         },
       }
     },
@@ -306,7 +363,13 @@ function DAGCanvasInner({
       frontier,
       focusMode,
       depthMap,
-    ]
+      expansionProposedIds,
+      expansionState,
+      expansionSelectedIds,
+      expansionSourceId,
+      onToggleSelectedInExpansion,
+      onRequestExpandFromNode,
+    ],
   )
 
   useEffect(() => {
@@ -338,10 +401,30 @@ function DAGCanvasInner({
     return () => clearTimeout(t)
   }, [layoutKey, fitView, fitViewPadding])
 
-  // Edge styling with focus-mode dimming
+  // Edge styling with focus-mode dimming and special style for proposed edges.
   const styledEdges = useMemo(() => {
     return edges.map((edge) => {
-      const bothRead = readNodeIds.has(edge.source) && readNodeIds.has(edge.target)
+      const sourceRead = readNodeIds.has(edge.source)
+      const targetRead = readNodeIds.has(edge.target)
+      const bothRead = sourceRead && targetRead
+      const edgeConnectsProposed =
+        expansionProposedIds.has(edge.source) || expansionProposedIds.has(edge.target)
+      if (edgeConnectsProposed && expansionSourceId && edge.source === expansionSourceId) {
+        const stroke = "var(--amber-edge, rgba(245, 158, 11, 0.85))"
+        return {
+          ...edge,
+          type: "default",
+          markerEnd: { type: "arrowclosed" as const, color: stroke },
+          style: {
+            stroke,
+            strokeWidth: 2,
+            strokeDasharray: "4 4",
+            opacity: 1,
+            transition: "opacity 0.3s, stroke-width 0.3s",
+          },
+          animated: false,
+        }
+      }
       const stroke = bothRead ? `var(--edge-active)` : `var(--edge-default)`
       return {
         ...edge,
@@ -356,7 +439,7 @@ function DAGCanvasInner({
         animated: bothRead,
       }
     })
-  }, [edges, readNodeIds, focusMode])
+  }, [edges, readNodeIds, focusMode, expansionProposedIds, expansionSourceId])
 
   // Color-coded minimap
   const minimapNodeColor = useCallback(
@@ -550,6 +633,17 @@ function DAGCanvasInner({
             onToggleRead={onToggleRead}
             onToggleStar={onToggleStar}
             onSaveNote={onSaveNote}
+            onExpandFromHere={onRequestExpandFromNode}
+            isExpansionDisabled={!!expansionState && expansionState.status !== "idle"}
+          />
+        )}
+
+        {/* Expansion accept bar */}
+        {expansionState && expansionState.proposedNodes.length > 0 && (
+          <ExpansionAcceptBar
+            expansion={expansionState}
+            onConfirm={onConfirmExpansion ?? (() => {})}
+            onDismiss={onDismissExpansion ?? (() => {})}
           />
         )}
       </div>

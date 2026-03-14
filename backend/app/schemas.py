@@ -48,3 +48,25 @@ class CreateTrailIn(BaseModel):
     """Request body for creating a new trail."""
     topic: str
     size: TrailSize = "medium"
+
+
+class TrailExpansionIn(BaseModel):
+    """Request body for proposing an expansion from a given node in a trail."""
+    sourceNodeId: str
+
+
+class ExpansionEdgeOut(BaseModel):
+    source: str
+    target: str
+
+
+class TrailExpansionProposalOut(BaseModel):
+    """Ephemeral proposal of expansion nodes/edges. Not yet persisted to the trail."""
+    nodes: list[DAGNodeOut]
+    edges: list[ExpansionEdgeOut]
+
+
+class TrailExpansionConfirmIn(BaseModel):
+    """Confirm which proposed nodes to add to the trail."""
+    sourceNodeId: str
+    acceptedNodeIds: list[str]

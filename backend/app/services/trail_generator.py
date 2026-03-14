@@ -3,12 +3,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.repositories.trails import create_trail_from_generated_data
-from app.schemas import TrailSize, TrailSummaryOut
+from app.repositories.trails import (
+    create_trail_from_generated_data,
+    get_trail_detail,
+)
+from app.schemas import (
+    TrailExpansionConfirmIn,
+    TrailExpansionProposalOut,
+    TrailSize,
+    TrailSummaryOut,
+)
+from app.models import Paper, Trail, UserPaper, PaperGraphEdge
 from app.services.openai_client import (
     OpenAIClientError,
     select_and_order_papers,
@@ -549,3 +559,229 @@ def generate_trail(
 ) -> TrailSummaryOut:
     """Synchronous wrapper to preserve existing callsites (e.g. tests)."""
     return asyncio.run(generate_trail_async(db, user_id, topic, size))
+
+
+def generate_expansion(
+    db: Session,
+    user_id: uuid.UUID,
+    trail_id: uuid.UUID,
+    source_node_id: uuid.UUID,
+) -> TrailExpansionProposalOut:
+    """Generate a small, ephemeral expansion proposal for a given node in a trail.
+
+    This does NOT persist anything to the database. It uses OpenAlex to find a
+    handful of related works given the trail topic + source paper title, and
+    returns them as DAGNodeOut-shaped data with edges from the source node.
+    """
+    trail: Trail | None = db.query(Trail).filter(Trail.id == trail_id, Trail.user_id == user_id).first()
+    if not trail:
+        raise TrailGenerationError("Trail not found.")
+
+    source_paper: Paper | None = db.query(Paper).filter(Paper.id == source_node_id).first()
+    if not source_paper:
+        raise TrailGenerationError("Source node not found in trail.")
+
+    # Use a simple query combining topic + source title to find related works.
+    query = f"{trail.topic} {source_paper.title}".strip()
+    if not query:
+        raise TrailGenerationError("Cannot expand from an empty topic/title.")
+
+    # Collect OpenAlex IDs of papers already in this trail so we can skip them.
+    trail_paper_ids: set[uuid.UUID] = set()
+    for edge in trail.edges:
+        trail_paper_ids.add(edge.paper_id)
+        if edge.next_node_id is not None:
+            trail_paper_ids.add(edge.next_node_id)
+    existing_openalex_ids: set[str] = set()
+    if trail_paper_ids:
+        for p in db.query(Paper).filter(Paper.id.in_(trail_paper_ids)).all():
+            if p.openalex_id:
+                existing_openalex_ids.add(p.openalex_id.strip())
+
+    # Keep this expansion lightweight: a small number of candidates only.
+    try:
+        candidates = openalex.search_works(query, limit=10)
+    except OpenAlexError as exc:  # type: ignore[unreachable]
+        logger.warning("OpenAlex search for expansion failed: %s", exc)
+        candidates = []
+
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, str]] = []
+
+    for candidate in candidates:
+        if len(nodes) >= 4:
+            break
+        openalex_id = (candidate.get("openalex_id") or "").strip()
+        if not openalex_id:
+            continue
+        if openalex_id in existing_openalex_ids:
+            continue
+        year = int(candidate.get("year") or 0)
+        safe_year = year if 1500 <= year <= 3000 else 0
+        paper_out = {
+            "id": openalex_id,
+            "title": (candidate.get("title") or "").strip(),
+            "authors": list(candidate.get("authors") or []),
+            "year": safe_year,
+            "abstract": (candidate.get("abstract") or "").strip(),
+            "url": (candidate.get("url") or "").strip(),
+            "isRead": False,
+            "note": "",
+            "isStarred": False,
+        }
+        node = {
+            "id": openalex_id,
+            "paper": paper_out,
+            # For now, model each expansion node as depending directly on the source node.
+            "dependencies": [str(source_node_id)],
+        }
+        nodes.append(node)
+        edges.append({"source": str(source_node_id), "target": openalex_id})
+
+    return TrailExpansionProposalOut(nodes=nodes, edges=edges)
+
+
+def apply_expansion(
+    db: Session,
+    user_id: uuid.UUID,
+    trail_id: uuid.UUID,
+    payload: TrailExpansionConfirmIn,
+):
+    """Persist an accepted expansion into an existing trail and return updated detail.
+
+    This recomputes the same OpenAlex search used in generate_expansion and then
+    filters to only the acceptedNodeIds. New Paper rows and PaperGraphEdge rows
+    are created as needed, along with UserPaper join rows for the current user.
+    """
+    trail: Trail | None = db.query(Trail).filter(Trail.id == trail_id, Trail.user_id == user_id).first()
+    if not trail:
+        raise TrailGenerationError("Trail not found.")
+
+    try:
+        source_uuid = uuid.UUID(payload.sourceNodeId)
+    except ValueError as exc:
+        raise TrailGenerationError("Invalid source node id.") from exc
+
+    source_paper: Paper | None = db.query(Paper).filter(Paper.id == source_uuid).first()
+    if not source_paper:
+        raise TrailGenerationError("Source node not found in trail.")
+
+    query = f"{trail.topic} {source_paper.title}".strip()
+    if not query:
+        raise TrailGenerationError("Cannot expand from an empty topic/title.")
+
+    # Collect papers already in this trail so we don't re-add them (which could create cycles).
+    trail_paper_ids: set[uuid.UUID] = set()
+    for edge in trail.edges:
+        trail_paper_ids.add(edge.paper_id)
+        if edge.next_node_id is not None:
+            trail_paper_ids.add(edge.next_node_id)
+    existing_openalex_ids: set[str] = set()
+    if trail_paper_ids:
+        for p in db.query(Paper).filter(Paper.id.in_(trail_paper_ids)).all():
+            if p.openalex_id:
+                existing_openalex_ids.add(p.openalex_id.strip())
+
+    try:
+        candidates = openalex.search_works(query, limit=12)
+    except OpenAlexError as exc:  # type: ignore[unreachable]
+        logger.warning("OpenAlex search for expansion (confirm) failed: %s", exc)
+        candidates = []
+
+    by_openalex_id: dict[str, dict[str, Any]] = {}
+    for cand in candidates:
+        oid = (cand.get("openalex_id") or "").strip()
+        if oid:
+            by_openalex_id[oid] = cand
+
+    accepted_ids: list[str] = [
+        (nid or "").strip() for nid in payload.acceptedNodeIds if (nid or "").strip()
+    ]
+    if not accepted_ids:
+        return get_trail_detail(db, trail.id, user_id)
+
+    persisted_ids: list[uuid.UUID] = []
+    for external_id in accepted_ids:
+        if external_id in existing_openalex_ids:
+            continue
+        raw = by_openalex_id.get(external_id)
+        if not raw:
+            continue
+
+        openalex_id = (raw.get("openalex_id") or "").strip() or None
+        doi = (raw.get("doi") or "").strip() or None
+        title = (raw.get("title") or "").strip()
+        if not title:
+            continue
+
+        paper: Paper | None = None
+        if openalex_id:
+            paper = db.query(Paper).filter(Paper.openalex_id == openalex_id).first()
+        if paper is None and doi:
+            paper = db.query(Paper).filter(Paper.doi == doi).first()
+        if paper is None:
+            year = int(raw.get("year") or 0)
+            safe_year = year if 1500 <= year <= 3000 else 1970
+            paper = Paper(
+                title=title,
+                author=", ".join(raw.get("authors") or []),
+                abstract=(raw.get("abstract") or "").strip() or None,
+                doi=doi,
+                openalex_id=openalex_id,
+                date=datetime(safe_year, 1, 1),
+                url=(raw.get("url") or "").strip() or None,
+            )
+            db.add(paper)
+            db.flush()
+        else:
+            paper.title = title or paper.title
+            if raw.get("authors"):
+                paper.author = ", ".join(raw.get("authors"))
+            if raw.get("abstract"):
+                paper.abstract = (raw.get("abstract") or "").strip()
+            if openalex_id and not paper.openalex_id:
+                paper.openalex_id = openalex_id
+            if doi and not paper.doi:
+                paper.doi = doi
+            if raw.get("url"):
+                paper.url = (raw.get("url") or "").strip()
+
+        persisted_ids.append(paper.id)
+
+        # Create an edge from the source node into this new paper within this trail.
+        db.add(
+            PaperGraphEdge(
+                paper_id=source_uuid,
+                trail_id=trail.id,
+                next_node_id=paper.id,
+            )
+        )
+
+    if not persisted_ids:
+        # Nothing new was persisted; return existing detail.
+        return get_trail_detail(db, trail.id, user_id)
+
+    # Ensure UserPaper rows exist for every newly added paper for this user.
+    existing = {
+        (up.user_id, up.paper_id)
+        for up in db.query(UserPaper).filter(
+            UserPaper.user_id == user_id,
+            UserPaper.paper_id.in_(persisted_ids),
+        ).all()
+    }
+    for pid in persisted_ids:
+        if (user_id, pid) not in existing:
+            db.add(
+                UserPaper(
+                    user_id=user_id,
+                    paper_id=pid,
+                    has_read=False,
+                    note=None,
+                    is_starred=False,
+                )
+            )
+
+    trail.last_modified = datetime.utcnow()
+    db.commit()
+
+    return get_trail_detail(db, trail.id, user_id)

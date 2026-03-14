@@ -313,7 +313,7 @@ export function TrailSidebar({
                         </>
                       )}
                     </button>
-                    {!collapsed && isActive && onDeleteTrail && (
+                    {!collapsed && onDeleteTrail && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -324,7 +324,8 @@ export function TrailSidebar({
                         className={cn(
                           "flex-shrink-0 border-l border-sidebar-border/40 px-2 py-1.5 text-muted-foreground/70 transition-opacity duration-150",
                           "hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20",
-                          "focus:outline-none focus:ring-1 focus:ring-destructive/50 focus:ring-inset"
+                          "focus:outline-none focus:ring-1 focus:ring-destructive/50 focus:ring-inset",
+                          "opacity-0 group-hover/row:opacity-100"
                         )}
                         aria-label={`Delete trail ${trail.topic}`}
                       >
