@@ -185,7 +185,6 @@ export function TrailsApp() {
         stageMessage: initialStageMessage,
         papers: [],
       })
-      router.push("/trails")
 
       try {
         const res = await fetch(`${BACKEND_API_BASE}/trails/stream`, {
@@ -215,6 +214,53 @@ export function TrailsApp() {
         const decoder = new TextDecoder()
         let buffer = ""
         let createdTrailId: string | null = null
+        const processChunk = async (chunk: string) => {
+          if (!chunk.trim()) return
+          const data = chunk
+            .split("\n")
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.replace(/^data:\s?/, ""))
+            .join("")
+          if (!data) return
+
+          let event: TrailStreamEvent
+          try {
+            event = JSON.parse(data) as TrailStreamEvent
+          } catch {
+            return
+          }
+
+          if (event.type === "status") {
+            await maybeAdvanceStage(
+              event.stage ?? displayedStage,
+              event.message ?? initialStageMessage,
+            )
+          } else if (event.type === "candidate" || event.type === "verified") {
+            const incomingTitle = event.paper?.title?.trim()
+            if (!incomingTitle) return
+            const incomingPaper: CandidatePaper = {
+              title: incomingTitle,
+              authors: Array.isArray(event.paper?.authors)
+                ? event.paper.authors.filter((author): author is string => !!author)
+                : [],
+              year: typeof event.paper?.year === "number" ? event.paper.year : undefined,
+              verified: event.type === "verified",
+              source: event.type === "verified" ? "openalex" : "ai",
+            }
+            setGeneratingState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    papers: upsertPaper(prev.papers, incomingPaper),
+                  }
+                : prev,
+            )
+          } else if (event.type === "error") {
+            throw new Error(event.message || "Trail generation failed.")
+          } else if (event.type === "complete") {
+            createdTrailId = event.trail_id ?? null
+          }
+        }
 
         while (true) {
           const { done, value } = await reader.read()
@@ -224,52 +270,13 @@ export function TrailsApp() {
           buffer = chunks.pop() ?? ""
 
           for (const chunk of chunks) {
-            if (!chunk.trim()) continue
-            const data = chunk
-              .split("\n")
-              .filter((line) => line.startsWith("data:"))
-              .map((line) => line.replace(/^data:\s?/, ""))
-              .join("")
-            if (!data) continue
-
-            let event: TrailStreamEvent
-            try {
-              event = JSON.parse(data) as TrailStreamEvent
-            } catch {
-              continue
-            }
-
-            if (event.type === "status") {
-              await maybeAdvanceStage(
-                event.stage ?? displayedStage,
-                event.message ?? initialStageMessage,
-              )
-            } else if (event.type === "candidate" || event.type === "verified") {
-              const incomingTitle = event.paper?.title?.trim()
-              if (!incomingTitle) continue
-              const incomingPaper: CandidatePaper = {
-                title: incomingTitle,
-                authors: Array.isArray(event.paper?.authors)
-                  ? event.paper.authors.filter((author): author is string => !!author)
-                  : [],
-                year: typeof event.paper?.year === "number" ? event.paper.year : undefined,
-                verified: event.type === "verified",
-                source: event.type === "verified" ? "openalex" : "ai",
-              }
-              setGeneratingState((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      papers: upsertPaper(prev.papers, incomingPaper),
-                    }
-                  : prev,
-              )
-            } else if (event.type === "error") {
-              throw new Error(event.message || "Trail generation failed.")
-            } else if (event.type === "complete") {
-              createdTrailId = event.trail_id ?? null
-            }
+            await processChunk(chunk)
           }
+        }
+
+        // Process trailing frame if stream ends without final "\n\n".
+        if (buffer.trim()) {
+          await processChunk(buffer)
         }
 
         if (!createdTrailId) {
