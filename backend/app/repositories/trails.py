@@ -10,6 +10,28 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import Paper, PaperGraphEdge, Trail, UserPaper
 from app.schemas import DAGNodeOut, PaperOut, TrailDetailOut, TrailSummaryOut
 
+def count_trails_for_user(db: Session, user_id: uuid.UUID) -> int:
+    """Count trails belonging to a user."""
+    return db.query(Trail).filter(Trail.user_id == user_id).count()
+
+
+def list_oldest_trail_ids_for_user(
+    db: Session,
+    user_id: uuid.UUID,
+    limit: int,
+) -> list[uuid.UUID]:
+    """Return oldest trail ids for a user by date_created ascending."""
+    if limit <= 0:
+        return []
+    rows = (
+        db.query(Trail.id)
+        .filter(Trail.user_id == user_id)
+        .order_by(Trail.date_created.asc(), Trail.id.asc())
+        .limit(limit)
+        .all()
+    )
+    return [row[0] for row in rows]
+
 
 def list_trails_for_user(db: Session, user_id: uuid.UUID) -> list[TrailSummaryOut]:
     """List trails for a user with read/total counts. Reads from DB."""

@@ -16,6 +16,7 @@ import { ThemeToggle } from "./theme-toggle"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { TrailSize, TrailSummary } from "@/lib/types"
+import { useAuth } from "@/lib/auth-context"
 
 interface WelcomeScreenProps {
   onCreateTrail: (topic: string, size: TrailSize) => Promise<void> | void
@@ -55,9 +56,11 @@ export function WelcomeScreen({
   recentTrails = [],
   isCreating = false,
 }: WelcomeScreenProps) {
+  const { user } = useAuth()
   const [topic, setTopic] = useState("")
   const [trailSize, setTrailSize] = useState<TrailSize>("medium")
   const greeting = useMemo(() => getGreeting(), [])
+  const currentPlanLabel = `${user?.tier ?? "Reader"} plan`
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -299,7 +302,7 @@ export function WelcomeScreen({
             href="/upgrade"
             className="group flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-4 py-2 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card/80"
           >
-            <span className="text-xs text-muted-foreground">Free plan</span>
+            <span className="text-xs text-muted-foreground">{currentPlanLabel}</span>
             <span className="h-1 w-1 rounded-full bg-border" />
             <span className="flex items-center gap-1 text-xs font-medium text-primary transition-colors group-hover:text-primary/80">
               <Zap className="h-3 w-3" />

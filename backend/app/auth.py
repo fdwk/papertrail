@@ -14,9 +14,15 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import User
+from .repositories.trails import (
+    count_trails_for_user as count_trails_for_user_db,
+    delete_trail as delete_trail_db,
+    list_oldest_trail_ids_for_user as list_oldest_trail_ids_for_user_db,
+)
 JWT_SECRET = os.getenv("AUTH_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
 JWT_TTL_DAYS = 7
+FREE_TRAIL_LIMIT = 3
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
@@ -30,10 +36,14 @@ class LoginBody(BaseModel):
 class TokenResponse(BaseModel):
     token: str
 
+class ChooseTierBody(BaseModel):
+    tier: str
+    confirmDowngrade: bool = False
 
-def _create_token(email: str) -> str:
+
+def _create_token(email: str, tier: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(days=JWT_TTL_DAYS)
-    payload = {"email": email, "exp": int(exp.timestamp())}
+    payload = {"email": email, "tier": tier, "exp": int(exp.timestamp())}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
@@ -103,7 +113,7 @@ def login(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Invalid email or password",
         )
 
-    token = _create_token(db_user.email)
+    token = _create_token(db_user.email, db_user.tier)
     return TokenResponse(token=token)
 
 
@@ -124,5 +134,45 @@ def signup(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
     db.commit()
     db.refresh(new_user)
 
-    token = _create_token(new_user.email)
+    token = _create_token(new_user.email, new_user.tier)
+    return TokenResponse(token=token)
+
+
+@router.post("/choose-tier", response_model=TokenResponse)
+def choose_tier(body: ChooseTierBody, user_id: uuid.UUID = Depends(require_user), db: Session = Depends(get_db)) -> TokenResponse:
+    """Set the current user's plan tier and return a refreshed JWT with the new tier."""
+    allowed = {"Reader", "Scholar", "Lab"}
+    tier = (body.tier or "").strip()
+    if tier not in allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tier")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    current_tier = user.tier or "Reader"
+
+    # Downgrade flow: Reader supports up to FREE_TRAIL_LIMIT trails.
+    if current_tier != "Reader" and tier == "Reader":
+        trail_count = count_trails_for_user_db(db, user_id)
+        if trail_count > FREE_TRAIL_LIMIT and not body.confirmDowngrade:
+            to_delete = trail_count - FREE_TRAIL_LIMIT
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Downgrading to Reader will delete your {to_delete} oldest trail(s) and keep "
+                    f"the {FREE_TRAIL_LIMIT} most recent. Continue?"
+                ),
+            )
+        if trail_count > FREE_TRAIL_LIMIT and body.confirmDowngrade:
+            to_delete = trail_count - FREE_TRAIL_LIMIT
+            oldest_ids = list_oldest_trail_ids_for_user_db(db, user_id, to_delete)
+            for tid in oldest_ids:
+                delete_trail_db(db, tid, user_id)
+
+    user.tier = tier
+    db.commit()
+    db.refresh(user)
+
+    token = _create_token(user.email, user.tier)
     return TokenResponse(token=token)

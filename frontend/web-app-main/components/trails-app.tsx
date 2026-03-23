@@ -198,7 +198,17 @@ export function TrailsApp() {
         })
 
         if (!res.ok || !res.body) {
-          throw new Error("Unable to start trail generation stream.")
+          let detail = ""
+          try {
+            const err = (await res.json()) as { detail?: string }
+            detail = err.detail ?? ""
+          } catch {
+            detail = ""
+          }
+          if (res.status === 403 && detail) {
+            throw new Error(detail)
+          }
+          throw new Error(detail || "Unable to start trail generation stream.")
         }
 
         const reader = res.body.getReader()

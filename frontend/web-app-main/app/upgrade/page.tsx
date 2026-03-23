@@ -1,9 +1,23 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { Check, ArrowLeft, Sparkles, BookOpen, Users, Zap, Shield, BarChart3, Brain, Infinity, HeadphonesIcon } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
+import { backendFetch } from "@/lib/api-client"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const tiers = [
   {
@@ -71,10 +85,63 @@ const tiers = [
 ]
 
 export default function UpgradePage() {
+  const { user, isLoading } = useAuth()
+  const currentTier = (user?.tier ?? "Reader").toLowerCase()
+  const router = useRouter()
+
+  const [updatingTier, setUpdatingTier] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [downgradePrompt, setDowngradePrompt] = useState<{
+    tier: string
+    message: string
+  } | null>(null)
+
+  const choosePlan = async (nextTier: string, confirmDowngrade = false) => {
+    setUpdatingTier(true)
+    setError(null)
+    try {
+      const res = await backendFetch<{ token?: string; detail?: string }>(
+        "/auth/choose-tier",
+        {
+          method: "POST",
+          body: JSON.stringify({ tier: nextTier, confirmDowngrade }),
+        },
+      )
+
+      if (res.ok && res.data?.token) {
+        localStorage.setItem("jwt_token", res.data.token)
+        window.location.reload()
+        return
+      }
+
+      if (res.status === 409 && !confirmDowngrade) {
+        const msg =
+          res.data?.detail ??
+          "Downgrading will remove older trails to fit the free-tier limit. Continue?"
+        setDowngradePrompt({ tier: nextTier, message: msg })
+        return
+      }
+
+      setError(res.data?.detail ?? "Failed to update plan.")
+      router.refresh()
+    } finally {
+      setUpdatingTier(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-dvh bg-background flex items-center justify-center text-muted-foreground">
+        Loading your plan…
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-dvh bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4">
+    <>
+      <div className="min-h-dvh bg-background">
+        {/* Header */}
+        <header className="flex items-center justify-between px-6 py-4">
         <Link
           href="/"
           className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -98,11 +165,21 @@ export default function UpgradePage() {
         </p>
       </div>
 
+      {error && (
+        <div className="mx-auto mb-4 max-w-2xl px-6">
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        </div>
+      )}
+
       {/* Pricing Cards */}
       <div className="mx-auto grid max-w-5xl gap-5 px-6 pb-20 pt-6 md:grid-cols-3">
         {tiers.map((tier) => {
+          const isCurrent = tier.name.toLowerCase() === currentTier
           const isScholar = tier.accent === "scholar"
           const isLab = tier.accent === "lab"
+          const isChooseable = !isCurrent && !isLab
 
           return (
             <div
@@ -119,6 +196,14 @@ export default function UpgradePage() {
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
                     {tier.badge}
+                  </span>
+                </div>
+              )}
+
+              {isCurrent && (
+                <div className="absolute -top-3 right-4">
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary shadow-sm border border-primary/20">
+                    Current Plan
                   </span>
                 </div>
               )}
@@ -172,16 +257,26 @@ export default function UpgradePage() {
 
               {/* CTA */}
               <button
-                disabled={tier.disabled}
+                disabled={!isChooseable || updatingTier}
                 className={cn(
                   "w-full rounded-xl py-3 text-sm font-semibold transition-all",
                   tier.ctaStyle === "solid"
                     ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98]"
                     : "border border-border text-foreground hover:bg-accent active:scale-[0.98]",
-                  tier.disabled && "cursor-default opacity-60 hover:bg-transparent active:scale-100"
+                  !isChooseable &&
+                    "pointer-events-none cursor-default opacity-60 hover:bg-transparent active:scale-100"
                 )}
+                onClick={() => {
+                  if (isChooseable) choosePlan(tier.name)
+                }}
               >
-                {tier.cta}
+                {isCurrent
+                  ? "Current Plan"
+                  : isLab
+                    ? tier.cta
+                    : updatingTier
+                      ? "Choosing..."
+                      : "Choose"}
               </button>
             </div>
           )
@@ -219,19 +314,58 @@ export default function UpgradePage() {
         </div>
       </div>
 
-      {/* FAQ-style section */}
-      <div className="mx-auto max-w-2xl px-6 py-14 text-center">
-        <p className="text-sm text-muted-foreground">
-          Questions?{" "}
-          <a
-            href="mailto:support@papertrail.app"
-            className="font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Reach out to our team
-          </a>
-          . We&apos;re happy to help you find the right plan.
-        </p>
+        {/* FAQ-style section */}
+        <div className="mx-auto max-w-2xl px-6 py-14 text-center">
+          <p className="text-sm text-muted-foreground">
+            Questions?{" "}
+            <a
+              href="mailto:support@papertrail.app"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Reach out to our team
+            </a>
+            . We&apos;re happy to help you find the right plan.
+          </p>
+        </div>
       </div>
-    </div>
+      <AlertDialog
+        open={downgradePrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) setDowngradePrompt(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Downgrade to Reader?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {downgradePrompt?.message ??
+                "Downgrading may remove older trails to meet the free-tier limit."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setError("Downgrade cancelled. You can delete trails manually and try again.")
+                setDowngradePrompt(null)
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const tier = downgradePrompt?.tier
+                setDowngradePrompt(null)
+                if (tier) {
+                  void choosePlan(tier, true)
+                }
+              }}
+            >
+              Continue and delete oldest
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

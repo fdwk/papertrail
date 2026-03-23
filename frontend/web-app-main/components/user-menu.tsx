@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { FileText, LogOut, User } from "lucide-react"
+import { FileText, LogOut, User, Sparkles } from "lucide-react"
 
 export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { user, logout } = useAuth()
@@ -62,6 +62,14 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         >
           <User className="h-4 w-4" />
           <span>My Trails</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => router.push("/upgrade")}
+          className="cursor-pointer"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>My plan</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

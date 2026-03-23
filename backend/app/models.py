@@ -31,6 +31,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    # Account plan tier used by the upgrade page and sidebar indicator.
+    tier: Mapped[str] = mapped_column(String, nullable=False, default="Reader")
 
     trails: Mapped[list["Trail"]] = relationship(
         back_populates="user",

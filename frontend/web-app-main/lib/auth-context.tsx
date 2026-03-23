@@ -5,6 +5,7 @@ import { backendFetch } from "@/lib/api-client"
 
 export interface AuthUser {
   email: string
+  tier: string
 }
 
 interface AuthContextValue {
@@ -18,7 +19,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function decodePayload(token: string): { email?: string; exp?: number } | null {
+function decodePayload(
+  token: string,
+): { email?: string; tier?: string; exp?: number } | null {
   try {
     const base64 = token.split(".")[1]
     return JSON.parse(atob(base64))
@@ -43,7 +46,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token && !isTokenExpired(token)) {
       const payload = decodePayload(token)
       if (payload?.email) {
-        setUser({ email: payload.email })
+        setUser({
+          email: payload.email,
+          tier: payload.tier ?? "Reader",
+        })
       }
     } else if (token) {
       // Expired token -- clean up
@@ -61,7 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.ok && res.data.token) {
       localStorage.setItem("jwt_token", res.data.token)
       const payload = decodePayload(res.data.token)
-      setUser({ email: payload?.email ?? email })
+      setUser({
+        email: payload?.email ?? email,
+        tier: payload?.tier ?? "Reader",
+      })
       return { ok: true }
     }
 
@@ -78,7 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.ok && res.data.token) {
       localStorage.setItem("jwt_token", res.data.token)
       const payload = decodePayload(res.data.token)
-      setUser({ email: payload?.email ?? email })
+      setUser({
+        email: payload?.email ?? email,
+        tier: payload?.tier ?? "Reader",
+      })
       return { ok: true }
     }
 

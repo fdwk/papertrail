@@ -14,6 +14,7 @@ if not os.getenv("DATABASE_URL"):
     backend_dir = Path(__file__).resolve().parent.parent
     load_dotenv(backend_dir / ".env")
 
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, echo=True)
 

@@ -54,9 +54,14 @@ def seed(session=None):
             email="demo@papertrail.dev",
             password_hash="password123",  # plaintext; mock auth compares directly
             date_created=datetime.now(timezone.utc),
+            tier="Scholar",
         )
         session.add(user)
         session.flush()
+    else:
+        # Default the seeded demo account to Scholar for the upgrade/plan UI.
+        # Keep other user fields untouched.
+        user.tier = "Scholar"
 
     # Collect all papers and node_id -> paper_id mapping
     paper_id_to_uuid: dict[str, uuid.UUID] = {}

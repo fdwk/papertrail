@@ -115,7 +115,7 @@ export function TrailSidebar({
   const [collapsed, setCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteTrailId, setDeleteTrailId] = useState<string | null>(null)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   const filteredTrails = useMemo(() => {
     if (!searchQuery.trim()) return trails
@@ -166,9 +166,19 @@ export function TrailSidebar({
             <FileText className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <h1 className="text-base font-bold tracking-tight text-sidebar-foreground">
-              Papertrail
-            </h1>
+            <div className="flex w-full items-center gap-2">
+              <h1 className="text-base font-bold tracking-tight text-sidebar-foreground">
+                Papertrail
+              </h1>
+              {user?.tier && (
+                <Link
+                  href="/upgrade"
+                  className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary/90 hover:bg-primary/15 transition-colors"
+                >
+                  {user.tier}
+                </Link>
+              )}
+            </div>
           )}
         </div>
 

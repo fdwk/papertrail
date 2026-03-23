@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from .auth import require_user
 from .database import get_db
 from .repositories.trails import (
+    count_trails_for_user as count_trails_for_user_db,
     create_trail_with_random_graph as create_trail_with_random_graph_db,
     delete_trail as delete_trail_db,
     get_trail_detail as get_trail_detail_db,
@@ -36,6 +37,26 @@ from .services.trail_generator import (
 
 router = APIRouter(prefix="/trails", tags=["trails"])
 logger = logging.getLogger(__name__)
+FREE_TRAIL_LIMIT = 3
+
+
+def _enforce_trail_limit_for_user(db: Session, user_id: uuid.UUID) -> None:
+    """
+    Free-tier users can have at most FREE_TRAIL_LIMIT trails.
+    Enforce before expensive generation calls.
+    """
+    from .models import User
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if (user.tier or "Reader") != "Reader":
+        return
+    if count_trails_for_user_db(db, user_id) >= FREE_TRAIL_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Free plan limit reached ({FREE_TRAIL_LIMIT} trails). Delete a trail or upgrade your plan.",
+        )
 
 @router.get("/", response_model=list[TrailSummaryOut])
 def list_trails_from_db(
@@ -53,6 +74,7 @@ def create_trail(
     db: Annotated[Session, Depends(get_db)],
 ) -> TrailSummaryOut:
     """Create a new trail via OpenAlex + GPT generation; fallback to random DB graph."""
+    _enforce_trail_limit_for_user(db, user_id)
     try:
         return generate_trail(db, user_id, body.topic, body.size)
     except TrailGenerationError as exc:
@@ -67,6 +89,7 @@ async def create_trail_stream(
     db: Annotated[Session, Depends(get_db)],
 ) -> StreamingResponse:
     """Stream trail generation progress via SSE."""
+    _enforce_trail_limit_for_user(db, user_id)
 
     async def event_generator():
         async for event in generate_trail_stream(db, user_id, body.topic, body.size):
