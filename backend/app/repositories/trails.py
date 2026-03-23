@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Paper, PaperGraphEdge, Trail, UserPaper
@@ -380,6 +380,35 @@ def delete_trail(db: Session, trail_id: uuid.UUID, user_id: uuid.UUID) -> bool:
     )
     if not trail:
         return False
+
+    # Collect papers referenced by this trail before deletion so we can clean up
+    # user-specific state that no longer belongs to any remaining trail.
+    candidate_paper_ids: set[uuid.UUID] = set()
+    for edge in trail.edges:
+        candidate_paper_ids.add(edge.paper_id)
+        if edge.next_node_id is not None:
+            candidate_paper_ids.add(edge.next_node_id)
+
     db.delete(trail)
+    db.flush()
+
+    for paper_id in candidate_paper_ids:
+        still_referenced = (
+            db.query(PaperGraphEdge.id)
+            .join(Trail, PaperGraphEdge.trail_id == Trail.id)
+            .filter(
+                Trail.user_id == user_id,
+                or_(
+                    PaperGraphEdge.paper_id == paper_id,
+                    PaperGraphEdge.next_node_id == paper_id,
+                ),
+            )
+            .first()
+        )
+        if still_referenced is None:
+            user_paper = db.get(UserPaper, (user_id, paper_id))
+            if user_paper is not None:
+                db.delete(user_paper)
+
     db.commit()
     return True

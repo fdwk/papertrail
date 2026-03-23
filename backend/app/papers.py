@@ -59,6 +59,9 @@ def list_user_papers(
 
         year = paper.date.year
         trail_topics = sorted({t.topic for t in trails if isinstance(t, Trail)})
+        if not trail_topics:
+            # Hide stale user-paper state rows that are no longer linked to any trail.
+            continue
 
         result.append(
             UserPaperOut(

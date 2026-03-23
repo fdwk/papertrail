@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import Paper, PaperGraphEdge, Trail, UserPaper
@@ -64,15 +65,23 @@ def list_user_papers_with_state(
     paper_ids = [paper.id for _, paper in rows]
 
     trail_rows = (
-        db.query(PaperGraphEdge.paper_id, Trail)
+        db.query(PaperGraphEdge.paper_id, PaperGraphEdge.next_node_id, Trail)
         .join(Trail, PaperGraphEdge.trail_id == Trail.id)
-        .filter(PaperGraphEdge.paper_id.in_(paper_ids))
+        .filter(
+            Trail.user_id == user_id,
+            or_(
+                PaperGraphEdge.paper_id.in_(paper_ids),
+                PaperGraphEdge.next_node_id.in_(paper_ids),
+            ),
+        )
         .all()
     )
 
     trails_by_paper: dict[uuid.UUID, list[Trail]] = {}
-    for pid, trail in trail_rows:
-        trails_by_paper.setdefault(pid, []).append(trail)
+    for source_pid, target_pid, trail in trail_rows:
+        trails_by_paper.setdefault(source_pid, []).append(trail)
+        if target_pid is not None:
+            trails_by_paper.setdefault(target_pid, []).append(trail)
 
     result: list[tuple[UserPaper, Paper, list[Trail]]] = []
     for up, paper in rows:
