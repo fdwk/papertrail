@@ -6,7 +6,6 @@ import {
   Sparkles,
   BookOpen,
   GitBranch,
-  Search,
   Zap,
   TrendingUp,
   Clock,
@@ -77,7 +76,7 @@ export function WelcomeScreen({
     <div className="relative flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-12">
       {/* Subtle dot pattern background */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
         aria-hidden
         style={{
           backgroundImage:
@@ -92,15 +91,15 @@ export function WelcomeScreen({
       </div>
 
       <div className="relative w-full max-w-xl">
-        {/* Icon + heading */}
-        <div className="mb-10 flex flex-col items-center">
-          <div className="animate-fade-up delay-0 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/[0.08]">
-            <Search className="h-6 w-6 text-primary" />
-          </div>
-          <h2 className="animate-fade-up delay-1 mt-6 text-balance text-center text-3xl font-bold tracking-tight text-foreground">
-            {greeting}. What will you explore?
+        {/* Heading */}
+        <div className="mb-12 flex flex-col items-center">
+          <p className="animate-fade-up delay-0 font-label text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
+            {greeting}
+          </p>
+          <h2 className="animate-fade-up delay-1 mt-4 text-balance text-center text-[clamp(2.25rem,5vw,3.5rem)] font-light italic leading-[1.15] tracking-tight text-foreground">
+            What will you explore?
           </h2>
-          <p className="animate-fade-up delay-2 mt-2 text-center text-sm text-muted-foreground">
+          <p className="animate-fade-up delay-2 mt-3 text-center text-sm leading-relaxed text-muted-foreground">
             Enter a research topic to generate a structured reading trail.
           </p>
         </div>
@@ -113,12 +112,12 @@ export function WelcomeScreen({
             onChange={(e) => setTopic(e.target.value)}
             disabled={isCreating}
             placeholder="e.g., Transformer Architecture, Reinforcement Learning..."
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 pr-14 text-sm text-foreground shadow-sm shadow-black/[0.03] placeholder:text-muted-foreground/50 transition-all focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:shadow-md focus:shadow-primary/[0.04]"
+            className="w-full border-b-2 border-border bg-transparent px-2 py-4 pr-14 text-base italic text-foreground placeholder:text-muted-foreground/40 placeholder:not-italic transition-all focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!topic.trim() || isCreating}
-            className="absolute right-2.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-all disabled:opacity-25 hover:bg-primary/90 active:scale-95"
+            className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-primary text-primary-foreground shadow-sm transition-all disabled:opacity-25 hover:bg-primary/90 active:scale-95"
             aria-label="Create trail"
           >
             <ArrowRight className="h-4 w-4" />
@@ -127,7 +126,7 @@ export function WelcomeScreen({
         <div className="animate-fade-up delay-4 mt-4">
           <div className="mb-2 flex items-center justify-center gap-1.5">
             <Sparkles className="h-3 w-3 text-muted-foreground/50" />
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <span className="font-label text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
               Trail Size
             </span>
           </div>
@@ -139,14 +138,14 @@ export function WelcomeScreen({
                 onClick={() => setTrailSize(size.value)}
                 disabled={isCreating}
                 className={cn(
-                  "group rounded-2xl border px-3 py-3 text-left backdrop-blur-sm transition-all duration-200",
+                  "group rounded-none border px-3 py-3 text-left backdrop-blur-sm transition-all duration-200",
                   trailSize === size.value
-                    ? "border-primary/25 bg-primary/[0.06] text-foreground shadow-sm shadow-primary/[0.08]"
-                    : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/20 hover:bg-card hover:text-foreground",
+                    ? "border-primary/30 bg-card text-foreground shadow-sm"
+                    : "border-transparent bg-muted/60 text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
                 )}
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-xs font-semibold">{size.label}</div>
+                  <div className="font-heading text-xs font-semibold">{size.label}</div>
                   <div
                     className={cn(
                       "h-2.5 w-2.5 rounded-full border transition-colors",
@@ -190,7 +189,7 @@ export function WelcomeScreen({
         <div className="animate-fade-up delay-5 mt-5">
           <div className="mb-2.5 flex items-center justify-center gap-1.5">
             <TrendingUp className="h-3 w-3 text-muted-foreground/50" />
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <span className="font-label text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
               Trending
             </span>
           </div>
@@ -200,10 +199,10 @@ export function WelcomeScreen({
                 key={t.label}
                 onClick={() => { void onCreateTrail(t.label, trailSize) }}
                 disabled={isCreating}
-                className="group flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground active:scale-[0.97]"
+                className="group flex items-center gap-1.5 border border-border/60 bg-card px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground active:scale-[0.97]"
               >
                 <span>{t.label}</span>
-                <span className="rounded-md bg-muted px-1 py-px font-mono text-[10px] text-muted-foreground/50 transition-colors group-hover:bg-primary/10 group-hover:text-primary/70">
+                <span className="bg-muted px-1 py-px font-label font-mono text-[10px] text-muted-foreground/50 transition-colors group-hover:bg-ochre/15 group-hover:text-ochre">
                   {t.papers}
                 </span>
               </button>
@@ -216,7 +215,7 @@ export function WelcomeScreen({
           <div className="animate-fade-up delay-6 mt-10">
             <div className="mb-3 flex items-center justify-center gap-1.5">
               <Clock className="h-3 w-3 text-muted-foreground/50" />
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <span className="font-label text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
                 Pick up where you left off
               </span>
             </div>
@@ -233,22 +232,22 @@ export function WelcomeScreen({
                   <button
                     key={trail.id}
                     onClick={() => onSelectTrail?.(trail.id)}
-                    className="group flex flex-col gap-2.5 rounded-xl border border-border/60 bg-card/80 p-3.5 text-left backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card hover:shadow-sm active:scale-[0.98]"
+                    className="group flex flex-col gap-2.5 border border-border/60 bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-card hover:shadow-sm active:scale-[0.98]"
                   >
                     <div className="flex items-center gap-2">
                       <FileText className="h-3.5 w-3.5 shrink-0 text-primary/50 transition-colors group-hover:text-primary" />
-                      <span className="truncate text-xs font-semibold text-foreground">
+                      <span className="truncate font-heading text-xs font-semibold text-foreground">
                         {trail.topic}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-1 flex-1 overflow-hidden bg-muted">
                         <div
-                          className="h-full rounded-full bg-primary/60 transition-all duration-500 group-hover:bg-primary"
+                          className="h-full bg-primary/70 transition-all duration-500 group-hover:bg-primary"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="font-mono text-[10px] font-semibold text-muted-foreground/60">
+                      <span className="font-label font-mono text-[10px] font-semibold text-muted-foreground/60">
                         {pct}%
                       </span>
                     </div>
@@ -283,12 +282,12 @@ export function WelcomeScreen({
           ].map(({ icon: Icon, title, desc }) => (
             <div
               key={title}
-              className="flex flex-col items-center rounded-xl border border-border/50 bg-card/60 px-3 py-4 text-center backdrop-blur-sm transition-colors hover:bg-card/80"
+              className="flex flex-col items-center rounded-none border border-border/50 bg-muted/40 px-4 py-6 text-center backdrop-blur-sm transition-colors hover:bg-muted/60"
             >
-              <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/[0.08]">
+              <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-none bg-primary/10">
                 <Icon className="h-4 w-4 text-primary/80" />
               </div>
-              <p className="text-xs font-semibold text-foreground">{title}</p>
+              <p className="font-heading text-xs font-semibold text-foreground">{title}</p>
               <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
                 {desc}
               </p>
@@ -300,11 +299,11 @@ export function WelcomeScreen({
         <div className={cn("animate-fade-up mt-8 flex justify-center", hasRecent ? "delay-8" : "delay-7")}>
           <Link
             href="/upgrade"
-            className="group flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-4 py-2 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card/80"
+            className="group flex items-center gap-2 border border-border/60 bg-card/60 px-4 py-2 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card/80"
           >
-            <span className="text-xs text-muted-foreground">{currentPlanLabel}</span>
-            <span className="h-1 w-1 rounded-full bg-border" />
-            <span className="flex items-center gap-1 text-xs font-medium text-primary transition-colors group-hover:text-primary/80">
+            <span className="font-label text-xs text-muted-foreground">{currentPlanLabel}</span>
+            <span className="h-3 w-px bg-border/60" />
+            <span className="flex items-center gap-1 font-label text-xs font-medium text-primary transition-colors group-hover:text-primary/80">
               <Zap className="h-3 w-3" />
               Upgrade
             </span>

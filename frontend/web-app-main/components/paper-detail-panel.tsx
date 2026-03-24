@@ -54,7 +54,7 @@ export function PaperDetailPanel({
   }, [paper.note, node.id])
 
   return (
-    <div className="animate-slide-in-right absolute right-4 top-4 bottom-4 z-20 flex w-[400px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+    <div className="animate-slide-in-right absolute right-4 top-4 bottom-4 z-20 flex w-[400px] flex-col overflow-hidden rounded-none border border-border bg-card shadow-2xl">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-border p-5">
         <div className="min-w-0 flex-1">
@@ -78,7 +78,7 @@ export function PaperDetailPanel({
               )}
             </span>
           </div>
-          <h3 className="text-lg font-semibold leading-snug text-card-foreground">
+          <h3 className="font-heading text-lg font-semibold leading-snug text-card-foreground">
             {paper.title}
           </h3>
         </div>
@@ -86,9 +86,9 @@ export function PaperDetailPanel({
           <button
             onClick={() => onToggleStar(node.id)}
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-lg transition-all",
+              "flex h-9 w-9 items-center justify-center rounded-none transition-all",
               isStarred
-                ? "text-amber-500 hover:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-400/10"
+                ? "text-ochre hover:bg-ochre/10"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             aria-label={isStarred ? "Unstar paper" : "Star paper"}
@@ -110,7 +110,7 @@ export function PaperDetailPanel({
 
       {/* Metadata */}
       <div className="flex gap-4 border-b border-border px-5 py-3">
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5 font-label text-sm text-muted-foreground">
           <Users className="h-3.5 w-3.5" />
           <span className="truncate">
             {paper.authors.length <= 2
@@ -126,7 +126,7 @@ export function PaperDetailPanel({
 
       {/* Abstract & Notes */}
       <div className="flex flex-1 flex-col overflow-y-auto p-5">
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h4 className="mb-2 font-label text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
           Abstract
         </h4>
         <p className="text-sm leading-relaxed text-card-foreground/85">
@@ -141,7 +141,7 @@ export function PaperDetailPanel({
               Notes
             </h4>
             {showSaved && (
-              <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <span className="flex items-center gap-1 text-xs text-primary">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Saved
               </span>
@@ -153,13 +153,13 @@ export function PaperDetailPanel({
             onBlur={handleNoteBlur}
             placeholder="Add your notes, takeaways, or reminders..."
             rows={4}
-            className="w-full resize-y min-h-[88px] max-h-48 rounded-xl border border-border bg-muted/30 px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full resize-y min-h-[88px] max-h-48 rounded-none border border-border bg-muted/30 px-4 py-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
         {node.dependencies.length > 0 && (
           <div className="mt-5">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="mb-2 font-label text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
               Prerequisites
             </h4>
             <p className="text-sm text-muted-foreground">
@@ -171,11 +171,11 @@ export function PaperDetailPanel({
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border p-4">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border p-5">
         <button
           onClick={() => onToggleRead(node.id)}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
+            "flex flex-1 items-center justify-center gap-2 rounded-none px-4 py-2.5 font-heading text-sm font-medium transition-all",
             paper.isRead
               ? "bg-muted text-muted-foreground hover:bg-muted/80"
               : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
@@ -199,10 +199,10 @@ export function PaperDetailPanel({
             onClick={() => onExpandFromHere(node.id)}
             disabled={isExpansionDisabled}
             className={cn(
-              "flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center justify-center gap-2 rounded-none border px-4 py-2.5 font-heading text-sm font-medium transition-colors",
               isExpansionDisabled
                 ? "cursor-not-allowed border-border/60 bg-muted text-muted-foreground"
-                : "border-amber-500/60 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15 dark:border-amber-400/60 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20",
+                : "border-ochre/50 bg-ochre/10 text-ochre hover:bg-ochre/15",
             )}
             title={
               isExpansionDisabled
@@ -218,7 +218,7 @@ export function PaperDetailPanel({
           href={paper.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
+          className="ml-auto flex items-center justify-center gap-2 rounded-none border border-border bg-card px-4 py-2.5 font-heading text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
         >
           <ExternalLink className="h-4 w-4" />
           View

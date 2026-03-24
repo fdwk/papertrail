@@ -80,10 +80,10 @@ export function AuthForm({ mode }: AuthFormProps) {
           href="/"
           className="group flex items-center gap-3 transition-all duration-200 hover:scale-[1.02]"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20 transition-shadow group-hover:shadow-xl group-hover:shadow-primary/25">
+          <div className="flex h-12 w-12 items-center justify-center rounded-none bg-primary shadow-lg shadow-primary/20 transition-shadow group-hover:shadow-xl group-hover:shadow-primary/25">
             <FileText className="h-6 w-6 text-primary-foreground" />
           </div>
-          <span className="text-2xl font-bold tracking-tight text-foreground">
+          <span className="font-heading text-2xl font-bold tracking-tight text-foreground">
             Papertrail
           </span>
         </Link>
@@ -91,7 +91,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         {/* Auth card */}
         <Card className="w-full animate-fade-up border-border/50 bg-card/95 shadow-xl shadow-black/5 backdrop-blur-sm dark:shadow-black/20">
           <CardHeader className="items-center space-y-2 pb-2 text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight text-balance">
+            <CardTitle className="font-heading text-2xl font-bold tracking-tight text-balance">
               {title}
             </CardTitle>
             <CardDescription className="text-balance text-muted-foreground/90">
@@ -103,7 +103,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               {/* Error banner */}
               {error && (
-                <div className="flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3.5 text-sm text-destructive animate-fade-in">
+                <div className="flex items-start gap-2.5 rounded-none border border-destructive/30 bg-destructive/5 px-4 py-3.5 text-sm text-destructive animate-fade-in">
                   <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -111,7 +111,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
               {/* Email */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="email" className="text-sm font-medium text-foreground/90">
+                <Label htmlFor="email" className="font-label text-sm font-medium text-foreground/90">
                   Email
                 </Label>
                 <Input
@@ -129,7 +129,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
               {/* Password */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password" className="text-sm font-medium text-foreground/90">
+                <Label htmlFor="password" className="font-label text-sm font-medium text-foreground/90">
                   Password
                 </Label>
                 <div className="relative">
@@ -147,7 +147,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-none p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
@@ -164,7 +164,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 type="submit"
                 size="lg"
                 disabled={pending}
-                className="mt-1 h-12 w-full rounded-lg font-medium shadow-sm transition-all hover:shadow-md"
+                className="mt-1 h-12 w-full rounded-none font-heading font-medium shadow-sm transition-all hover:shadow-md"
               >
                 {pending ? (
                   <>
@@ -192,7 +192,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         </Card>
 
         {/* Footer note */}
-        <p className="text-center text-xs text-muted-foreground/70 leading-relaxed max-w-sm">
+        <p className="text-center font-label text-xs text-muted-foreground/70 leading-relaxed max-w-sm">
           By continuing, you agree to our Terms of Service and Privacy Policy.
         </p>
       </div>

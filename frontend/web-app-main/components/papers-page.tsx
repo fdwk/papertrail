@@ -164,7 +164,7 @@ export function PapersPage() {
 
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <header className="relative border-b border-border/50 bg-card/90 shadow-sm shadow-black/[0.02] backdrop-blur-md dark:shadow-none">
+      <header className="relative border-b border-border/40 bg-card/95 shadow-sm backdrop-blur-[12px] dark:bg-card/90">
         {/* Subtle gradient overlay */}
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-transparent to-muted/30 opacity-90 dark:from-primary/[0.08] dark:to-muted/20"
@@ -174,7 +174,7 @@ export function PapersPage() {
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Link
               href="/"
-              className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="flex shrink-0 items-center gap-1.5 rounded-none px-2.5 py-2 font-label text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
               aria-label="Back to home"
             >
               <ChevronLeft className="h-4 w-4 shrink-0" />
@@ -182,27 +182,27 @@ export function PapersPage() {
             </Link>
             <span className="h-5 w-px shrink-0 bg-border/60" aria-hidden />
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 dark:ring-primary/15">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary/10 ring-1 ring-primary/20 dark:ring-primary/15">
                 <BookOpen className="h-5 w-5 text-primary" />
               </div>
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
+                <h1 className="truncate font-heading text-base font-semibold tracking-tight text-foreground">
                   Your Papers
                 </h1>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="truncate font-label text-xs text-muted-foreground">
                   All papers from your trails in one place
                 </p>
               </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-full bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground md:flex">
+            <div className="hidden items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 font-label text-xs text-muted-foreground md:flex">
               <span className="font-mono font-medium tabular-nums text-foreground/80">
                 {papers.length}
               </span>
               <span>papers</span>
               <span className="h-1 w-1 rounded-full bg-border" />
-              <span className="text-emerald-600 dark:text-emerald-400">
+              <span className="text-primary">
                 {papers.filter((p) => p.isRead).length} read
               </span>
               <span className="text-muted-foreground/70">
@@ -215,14 +215,14 @@ export function PapersPage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-4">
-        <section className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/60 p-3 backdrop-blur-sm md:flex-row md:items-center md:justify-between">
+        <section className="flex flex-col gap-3 rounded-none border border-border/50 bg-muted/40 p-4 backdrop-blur-sm md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by title or author..."
-              className="w-full rounded-xl border border-border/60 bg-background/60 py-2 pl-9 pr-8 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-none border border-border/60 bg-card py-2 pl-9 pr-8 font-label text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             {query && (
               <button
@@ -256,7 +256,7 @@ export function PapersPage() {
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-2.5 py-1",
                 starredOnly
-                  ? "border-amber-400/70 bg-amber-500/10 text-amber-400"
+                  ? "border-ochre/50 bg-ochre/15 text-ochre"
                   : "border-border/60 text-muted-foreground hover:bg-muted/60",
               )}
             >
@@ -315,7 +315,7 @@ export function PapersPage() {
                 <article
                   key={paper.id}
                   className={cn(
-                    "group flex h-[240px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-3 text-sm shadow-sm transition-all hover:border-primary/40 hover:shadow-md",
+                    "group flex h-[240px] flex-col overflow-hidden rounded-none border border-border/60 bg-card p-5 text-sm shadow-sm transition-all hover:border-primary/35 hover:shadow-sm",
                     paper.isRead ? "ring-1 ring-primary/10" : "",
                   )}
                 >
@@ -341,7 +341,7 @@ export function PapersPage() {
                       >
                         {paper.title}
                       </h2>
-                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <p className="mt-1 flex items-center gap-1.5 font-label text-[11px] text-muted-foreground">
                         <span className="truncate">
                           {paper.authors[0]}
                           {paper.authors.length > 1 ? " et al." : ""}
@@ -350,7 +350,7 @@ export function PapersPage() {
                         <span className="font-mono text-[10px]">{paper.year}</span>
                         <button
                           onClick={() => handleToggleStar(paper.id)}
-                          className="ml-auto inline-flex items-center justify-center rounded-full p-0.5 text-amber-400 hover:bg-amber-500/10"
+                          className="ml-auto inline-flex items-center justify-center rounded-full p-0.5 text-ochre hover:bg-ochre/10"
                           aria-label={paper.isStarred ? "Unstar paper" : "Star paper"}
                         >
                           <Star
@@ -388,7 +388,7 @@ export function PapersPage() {
                     )}
                     <div className="mt-2 flex flex-col gap-2 text-[11px]">
                     {paper.note && !isEditing && (
-                      <p className="line-clamp-2 rounded-lg bg-muted/40 px-2 py-1 text-muted-foreground">
+                      <p className="line-clamp-2 rounded-none bg-muted/50 px-2 py-1 text-muted-foreground">
                         {paper.note}
                       </p>
                     )}
@@ -425,7 +425,7 @@ export function PapersPage() {
                     <button
                       type="button"
                       onClick={() => openNoteEditor(paper)}
-                      className="inline-flex items-center gap-1 rounded-xl border border-border/70 bg-background/60 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                      className="inline-flex items-center gap-1 rounded-none border border-border/70 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                     >
                       <PencilLine className="h-3 w-3" />
                       <span>{paper.note ? "Edit note" : "Add note"}</span>
@@ -435,7 +435,7 @@ export function PapersPage() {
                         href={paper.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-auto inline-flex items-center justify-between rounded-xl border border-border/70 bg-background/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5"
+                        className="ml-auto inline-flex items-center justify-between rounded-none border border-border/70 bg-muted/30 px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5"
                       >
                         <span className="truncate">Open paper</span>
                         <span className="ml-2 text-[10px] text-muted-foreground">

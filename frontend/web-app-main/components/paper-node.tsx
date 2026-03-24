@@ -76,32 +76,32 @@ function PaperNodeComponent({ data }: NodeProps) {
     [isSelectableInExpansion, onRequestExpand, nodeId],
   )
 
-  const dimmed = focusMode && paper.isRead && !isSelected && !isProposed
+  const dimmed = false
 
   return (
     <div
       onClick={handleClick}
       className={cn(
-        "group relative h-[172px] w-[280px] cursor-pointer rounded-xl border-2 transition-all duration-200",
+        "group relative h-[172px] w-[280px] cursor-pointer rounded-none border-2 transition-all duration-200",
         "hover:shadow-xl",
         isProposed
           ? cn(
-              "border-dashed border-amber-400/60 bg-amber-50/10 dark:bg-amber-950/20",
+              "border-dashed border-ochre/50 bg-ochre/5 dark:bg-ochre/10",
               !isSelectedInExpansion && "opacity-40",
             )
           : [
               isSelected && !paper.isRead &&
                 "border-foreground/30 bg-card shadow-lg shadow-foreground/5",
               isSelected && paper.isRead &&
-                "border-primary/60 bg-primary/5 shadow-lg shadow-primary/10",
+                "border-primary bg-[var(--node-read-bg)] shadow-lg shadow-primary/10",
               !isSelected && paper.isRead &&
-                "border-primary/30 bg-primary/5 shadow-md shadow-primary/5",
+                "border-primary/40 bg-[var(--node-read-bg)] shadow-md",
               !isSelected && !paper.isRead &&
                 "border-border bg-card shadow-md hover:border-foreground/20",
             ],
         dimmed && "focus-mode-dimmed",
         focusMode && isFrontier && !paper.isRead && !isProposed && "animate-pulse-ring",
-        isExpansionSource && "ring-2 ring-amber-400/60 ring-offset-2 ring-offset-background",
+        isExpansionSource && "ring-2 ring-ochre/60 ring-offset-2 ring-offset-background",
       )}
     >
       <Handle
@@ -112,12 +112,12 @@ function PaperNodeComponent({ data }: NodeProps) {
 
       {/* Depth badge or NEW pill for proposed nodes */}
       {isProposed ? (
-        <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-50 shadow-sm ring-1 ring-amber-400/80">
+        <span className="absolute -right-1.5 -top-1.5 z-10 rounded-none bg-ochre px-1.5 py-0.5 font-label text-[10px] font-semibold leading-none text-ochre-foreground shadow-sm ring-1 ring-ochre/80">
           NEW
         </span>
       ) : (
         depth != null && (
-          <span className="absolute -right-1.5 -top-1.5 z-10 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground shadow-sm ring-1 ring-border">
+          <span className="absolute -right-1.5 -top-1.5 z-10 rounded-none bg-muted px-1.5 py-0.5 font-label font-mono text-[10px] font-semibold leading-none text-muted-foreground shadow-sm ring-1 ring-border">
             L{depth}
           </span>
         )
@@ -158,7 +158,7 @@ function PaperNodeComponent({ data }: NodeProps) {
             className={cn(
               "line-clamp-2 text-sm font-semibold leading-snug",
               isProposed
-                ? "text-amber-200 dark:text-amber-100"
+                ? "text-ochre"
                 : paper.isRead
                   ? "text-primary"
                   : "text-card-foreground",
@@ -166,7 +166,7 @@ function PaperNodeComponent({ data }: NodeProps) {
           >
             {paper.title}
           </h3>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1.5 font-label text-xs text-muted-foreground">
             <span className="truncate">
               {paper.authors[0]}
               {paper.authors.length > 1 ? " et al." : ""}
@@ -174,7 +174,7 @@ function PaperNodeComponent({ data }: NodeProps) {
             <span className="text-border">|</span>
             <span className="font-mono text-[11px]">{paper.year}</span>
             {(paper.isStarred ?? false) && (
-              <Star className="ml-auto h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400" />
+              <Star className="ml-auto h-3.5 w-3.5 shrink-0 fill-ochre text-ochre" />
             )}
           </p>
           {paper.abstract ? (
@@ -196,7 +196,7 @@ function PaperNodeComponent({ data }: NodeProps) {
           className={cn(
             "absolute bottom-2 right-2 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
             isSelectedInExpansion
-              ? "border-emerald-500/80 bg-emerald-500/10 text-emerald-400"
+              ? "border-primary/80 bg-primary/10 text-primary"
               : "border-border bg-background/80 text-muted-foreground hover:bg-muted/80",
           )}
         >
