@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Check, ArrowLeft, Sparkles, BookOpen, Users, Zap, Shield, BarChart3, Brain, Infinity, HeadphonesIcon } from "lucide-react"
+import { Check, ArrowLeft, Sparkles, BookOpen, Users, Shield, BarChart3, Brain } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
@@ -139,188 +139,204 @@ export default function UpgradePage() {
 
   return (
     <>
-      <div className="min-h-dvh bg-background">
+      <div className="relative min-h-dvh bg-background">
+        {/* DAG-Grid dot pattern */}
+        <div
+          className="pointer-events-none fixed inset-0 opacity-[0.03]"
+          aria-hidden
+          style={{
+            backgroundImage:
+              "radial-gradient(circle, var(--border) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+        />
+
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Papertrail
-        </Link>
-        <ThemeToggle />
-      </header>
+        <header className="relative flex items-center justify-between px-8 py-5">
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-label text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Papertrail
+          </Link>
+          <ThemeToggle />
+        </header>
 
-      {/* Hero */}
-      <div className="mx-auto max-w-4xl px-6 pb-6 pt-8 text-center">
-        <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-          <Zap className="h-6 w-6 text-primary" />
+        {/* Hero */}
+        <div className="relative mx-auto max-w-4xl px-8 pb-4 pt-12 text-center">
+          <p className="font-label text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/50">
+            Plans & Pricing
+          </p>
+          <h1 className="mt-4 text-balance text-[clamp(2.5rem,5vw,3.75rem)] font-light italic leading-[1.1] tracking-tight text-foreground">
+            Invest in your research
+          </h1>
+          <p className="mx-auto mt-5 max-w-md text-balance text-sm leading-relaxed text-muted-foreground">
+            From solo exploration to full team collaboration — unlock deeper capabilities at every stage of your work.
+          </p>
+          <div className="mx-auto mt-8 w-12 border-t border-border/60" />
         </div>
-        <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          Choose your plan
-        </h1>
-        <p className="mx-auto mt-4 max-w-lg text-balance text-base text-muted-foreground">
-          Unlock deeper research capabilities. From solo exploration to full team collaboration.
-        </p>
-      </div>
 
-      {error && (
-        <div className="mx-auto mb-4 max-w-2xl px-6">
-          <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+        {error && (
+          <div className="relative mx-auto mb-4 max-w-2xl px-8">
+            <div className="border-l-2 border-destructive bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          </div>
+        )}
+
+        {/* Pricing Cards */}
+        <div className="relative mx-auto grid max-w-5xl gap-0 px-8 pb-24 pt-10 md:grid-cols-3">
+          {tiers.map((tier, idx) => {
+            const isCurrent = tier.name.toLowerCase() === currentTier
+            const isScholar = tier.accent === "scholar"
+            const isLab = tier.accent === "lab"
+            const isChooseable = !isCurrent && !isLab
+
+            return (
+              <div
+                key={tier.name}
+                className={cn(
+                  "relative flex flex-col p-8 transition-all",
+                  isScholar
+                    ? "bg-card shadow-sm ring-1 ring-primary/15 z-10 md:-my-3 md:p-10"
+                    : "bg-card/60",
+                  idx === 0 && "md:border-r md:border-border/30",
+                  idx === 2 && "md:border-l md:border-border/30",
+                )}
+              >
+                {/* Badge */}
+                {tier.badge && (
+                  <div className="mb-6">
+                    <span className="bg-primary px-2.5 py-1 font-label text-[10px] font-bold uppercase tracking-[0.1em] text-primary-foreground">
+                      {tier.badge}
+                    </span>
+                  </div>
+                )}
+
+                {isCurrent && (
+                  <div className="mb-6">
+                    <span className="bg-primary/10 px-2.5 py-1 font-label text-[10px] font-bold uppercase tracking-[0.1em] text-primary">
+                      Current Plan
+                    </span>
+                  </div>
+                )}
+
+                {!tier.badge && !isCurrent && <div className="mb-6 h-[22px]" />}
+
+                {/* Name */}
+                <div className="mb-5 flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center",
+                      isScholar
+                        ? "bg-primary/10 text-primary"
+                        : isLab
+                          ? "bg-ochre/10 text-ochre"
+                          : "bg-muted text-muted-foreground/60"
+                    )}
+                  >
+                    <tier.icon className="h-4 w-4" />
+                  </div>
+                  <h2 className="font-label text-xs font-bold uppercase tracking-[0.1em] text-foreground/70">{tier.name}</h2>
+                </div>
+
+                {/* Price */}
+                <div className="mb-1 flex items-baseline gap-1">
+                  <span className="text-4xl font-light italic tracking-tight text-foreground">
+                    {tier.price}
+                  </span>
+                  {tier.period && (
+                    <span className="font-label text-xs text-muted-foreground/60">{tier.period}</span>
+                  )}
+                </div>
+                <p className="mb-8 text-sm leading-relaxed text-muted-foreground">{tier.description}</p>
+
+                {/* Features */}
+                <ul className="mb-10 flex flex-1 flex-col gap-3">
+                  {tier.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-[13px]">
+                      <Check
+                        className={cn(
+                          "mt-0.5 h-3.5 w-3.5 shrink-0",
+                          isScholar
+                            ? "text-primary"
+                            : isLab
+                              ? "text-ochre"
+                              : "text-muted-foreground/40"
+                        )}
+                      />
+                      <span className="text-foreground/80">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA */}
+                <button
+                  disabled={!isChooseable || updatingTier}
+                  className={cn(
+                    "w-full py-3 font-label text-xs font-bold uppercase tracking-[0.06em] transition-all",
+                    tier.ctaStyle === "solid"
+                      ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98]"
+                      : "border-b-2 border-border text-foreground/70 hover:border-primary/40 hover:text-foreground active:scale-[0.98]",
+                    !isChooseable &&
+                      "pointer-events-none cursor-default opacity-50 hover:bg-transparent active:scale-100"
+                  )}
+                  onClick={() => {
+                    if (isChooseable) choosePlan(tier.name)
+                  }}
+                >
+                  {isCurrent
+                    ? "Current Plan"
+                    : isLab
+                      ? tier.cta
+                      : updatingTier
+                        ? "Choosing…"
+                        : "Choose"}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Bottom feature highlights */}
+        <div className="bg-muted/40">
+          <div className="mx-auto grid max-w-4xl gap-10 px-8 py-20 sm:grid-cols-3">
+            {[
+              {
+                icon: Brain,
+                title: "AI-Powered",
+                desc: "Smart paper recommendations and summaries powered by the latest models.",
+              },
+              {
+                icon: Shield,
+                title: "Secure & Private",
+                desc: "Your reading data stays private. SOC 2 compliant infrastructure.",
+              },
+              {
+                icon: BarChart3,
+                title: "Research Analytics",
+                desc: "Track your reading habits and discover knowledge gaps.",
+              },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="flex flex-col items-center text-center">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center bg-primary/8">
+                  <Icon className="h-5 w-5 text-primary/70" />
+                </div>
+                <h3 className="font-label text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/70">{title}</h3>
+                <p className="mt-2 max-w-[220px] text-[13px] leading-relaxed text-muted-foreground">{desc}</p>
+              </div>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Pricing Cards */}
-      <div className="mx-auto grid max-w-5xl gap-5 px-6 pb-20 pt-6 md:grid-cols-3">
-        {tiers.map((tier) => {
-          const isCurrent = tier.name.toLowerCase() === currentTier
-          const isScholar = tier.accent === "scholar"
-          const isLab = tier.accent === "lab"
-          const isChooseable = !isCurrent && !isLab
-
-          return (
-            <div
-              key={tier.name}
-              className={cn(
-                "relative flex flex-col rounded-2xl border p-6 transition-all",
-                isScholar
-                  ? "border-primary/40 bg-primary/[0.03] shadow-lg shadow-primary/5 ring-1 ring-primary/10"
-                  : "border-border bg-card"
-              )}
-            >
-              {/* Badge */}
-              {tier.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
-                    {tier.badge}
-                  </span>
-                </div>
-              )}
-
-              {isCurrent && (
-                <div className="absolute -top-3 right-4">
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary shadow-sm border border-primary/20">
-                    Current Plan
-                  </span>
-                </div>
-              )}
-
-              {/* Icon + Name */}
-              <div className="mb-4 flex items-center gap-3">
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-xl",
-                    isScholar
-                      ? "bg-primary/15 text-primary"
-                      : isLab
-                        ? "bg-violet-500/15 text-violet-500 dark:text-violet-400"
-                        : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  <tier.icon className="h-5 w-5" />
-                </div>
-                <h2 className="text-lg font-bold text-foreground">{tier.name}</h2>
-              </div>
-
-              {/* Price */}
-              <div className="mb-1 flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold tracking-tight text-foreground">
-                  {tier.price}
-                </span>
-                {tier.period && (
-                  <span className="text-sm text-muted-foreground">{tier.period}</span>
-                )}
-              </div>
-              <p className="mb-6 text-sm text-muted-foreground">{tier.description}</p>
-
-              {/* Features */}
-              <ul className="mb-8 flex flex-1 flex-col gap-2.5">
-                {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm">
-                    <Check
-                      className={cn(
-                        "mt-0.5 h-4 w-4 shrink-0",
-                        isScholar
-                          ? "text-primary"
-                          : isLab
-                            ? "text-violet-500 dark:text-violet-400"
-                            : "text-muted-foreground/60"
-                      )}
-                    />
-                    <span className="text-foreground/90">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
-              <button
-                disabled={!isChooseable || updatingTier}
-                className={cn(
-                  "w-full rounded-xl py-3 text-sm font-semibold transition-all",
-                  tier.ctaStyle === "solid"
-                    ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98]"
-                    : "border border-border text-foreground hover:bg-accent active:scale-[0.98]",
-                  !isChooseable &&
-                    "pointer-events-none cursor-default opacity-60 hover:bg-transparent active:scale-100"
-                )}
-                onClick={() => {
-                  if (isChooseable) choosePlan(tier.name)
-                }}
-              >
-                {isCurrent
-                  ? "Current Plan"
-                  : isLab
-                    ? tier.cta
-                    : updatingTier
-                      ? "Choosing..."
-                      : "Choose"}
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Bottom feature highlights */}
-      <div className="border-t border-border bg-card/40">
-        <div className="mx-auto grid max-w-4xl gap-6 px-6 py-14 sm:grid-cols-3">
-          {[
-            {
-              icon: Brain,
-              title: "AI-Powered",
-              desc: "Smart paper recommendations and summaries powered by the latest models.",
-            },
-            {
-              icon: Shield,
-              title: "Secure & Private",
-              desc: "Your reading data stays private. SOC 2 compliant infrastructure.",
-            },
-            {
-              icon: BarChart3,
-              title: "Research Analytics",
-              desc: "Track your reading habits and discover knowledge gaps.",
-            },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="flex flex-col items-center text-center">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                <Icon className="h-5 w-5 text-primary" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-        {/* FAQ-style section */}
-        <div className="mx-auto max-w-2xl px-6 py-14 text-center">
-          <p className="text-sm text-muted-foreground">
+        {/* Footer / Contact */}
+        <div className="mx-auto max-w-2xl px-8 py-16 text-center">
+          <p className="text-sm italic text-muted-foreground">
             Questions?{" "}
             <a
               href="mailto:support@papertrail.app"
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="not-italic font-medium text-primary underline-offset-4 hover:underline"
             >
               Reach out to our team
             </a>
