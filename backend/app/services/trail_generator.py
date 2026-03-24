@@ -34,9 +34,9 @@ from app.services.openalex import (
 
 logger = logging.getLogger(__name__)
 TRAIL_SIZE_CONFIG: dict[TrailSize, dict[str, int]] = {
-    "small": {"suggest_limit": 8, "search_limit": 6, "max_papers": 6},
-    "medium": {"suggest_limit": 15, "search_limit": 10, "max_papers": 10},
-    "large": {"suggest_limit": 20, "search_limit": 14, "max_papers": 14},
+    "small": {"suggest_limit": 8, "search_limit": 10, "max_papers": 6},
+    "medium": {"suggest_limit": 15, "search_limit": 20, "max_papers": 10},
+    "large": {"suggest_limit": 20, "search_limit": 20, "max_papers": 14},
 }
 
 
