@@ -174,16 +174,14 @@ def select_and_order_papers(
                     "Organize them as a DAG representing a logical learning progression. "
                     "Edges point from prerequisite paper to dependent paper. "
 
-                    "Prefer a chain-like progression where most papers build on exactly one prior paper. "
                     "Minimize branching and keep fan-out small (avoid a single paper leading to many children). "
-                    "Prefer deeper structures over wide ones. Aim for a trail depth of at least 3–5 levels when possible. "
+                    "Prefer deeper structures over wide ones. Aim for a trail depth of at least 3-5 levels when possible. "
+                    "All edge endpoints must appear in selected_papers. "
 
                     "Occasionally include synthesis papers that combine 2+ prerequisite works. "
-                    "No more than 2 root nodes with no prerequisites. "
-
                     "Avoid redundant transitive edges. "
+                    "ONLY one root node with no prerequisites. "
                     "Use only paper IDs from the input and do not invent new ones. "
-                    "All edge endpoints must appear in selected_papers. "
                     "Return ONLY JSON with format "
                     '{"selected_papers":["W..."],"edges":[{"from":"W...","to":"W..."}]}.'
                 )
