@@ -170,7 +170,7 @@ def search_works(query: str, limit: int = 10) -> list[dict[str, Any]]:
     data = _get(
         "/works",
         params={
-            "search": query,
+            "search.semantic": query,
             "sort": "cited_by_count:desc",
             "per_page": max(1, min(limit, 25)),
         },
