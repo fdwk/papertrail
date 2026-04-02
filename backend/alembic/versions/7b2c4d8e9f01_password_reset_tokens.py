@@ -34,12 +34,14 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token_hash"),
+        if_not_exists=True,
     )
     op.create_index(
         op.f("ix_password_reset_tokens_user_id"),
         "password_reset_tokens",
         ["user_id"],
         unique=False,
+        if_not_exists=True,
     )
 
 
