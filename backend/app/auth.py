@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
@@ -9,11 +10,12 @@ from typing import Annotated
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import User
+from .passwords import hash_password, verify_password
 from .repositories.trails import (
     count_trails_for_user as count_trails_for_user_db,
     delete_trail as delete_trail_db,
@@ -29,8 +31,26 @@ security = HTTPBearer(auto_error=False)
 
 
 class LoginBody(BaseModel):
+    """Login accepts any non-empty password so legacy accounts are not locked out."""
+
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class SignupBody(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=256)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must include a lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must include an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must include a number")
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -102,23 +122,29 @@ def require_user(
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
-    """
-    Login now verifies the user against the real database.
-    Passwords are stored in User.password_hash (currently as plain text).
-    """
+    """Verify password (Argon2id or legacy plaintext during migration); re-hash when needed."""
     db_user = db.query(User).filter(User.email == body.email).first()
-    if not db_user or db_user.password_hash != body.password:
+    if not db_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+    ok, new_hash = verify_password(db_user.password_hash, body.password)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    if new_hash is not None:
+        db_user.password_hash = new_hash
+        db.commit()
 
     token = _create_token(db_user.email, db_user.tier)
     return TokenResponse(token=token)
 
 
 @router.post("/signup", response_model=TokenResponse)
-def signup(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
+def signup(body: SignupBody, db: Session = Depends(get_db)) -> TokenResponse:
     """
     Signup persists the new user in the database
     """
@@ -129,7 +155,7 @@ def signup(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
             detail="User already exists",
         )
 
-    new_user = User(email=body.email, password_hash=body.password)
+    new_user = User(email=body.email, password_hash=hash_password(body.password))
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
