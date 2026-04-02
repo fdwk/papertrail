@@ -1,12 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import {
+  validateAuthEmail,
+  validateLoginPassword,
+  validateSignupPassword,
+  getSignupPasswordRules,
+  PASSWORD_MAX,
+  PASSWORD_MIN_SIGNUP,
+} from "@/lib/auth-validation"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Card,
   CardContent,
@@ -15,10 +25,41 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { FileText, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react"
+import {
+  FileText,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+  Mail,
+  CheckCircle2,
+  Circle,
+  Info,
+} from "lucide-react"
 
 interface AuthFormProps {
   mode: "login" | "signup"
+}
+
+function RuleRow({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2.5 text-sm transition-colors duration-200",
+        met ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground",
+      )}
+    >
+      {met ? (
+        <CheckCircle2
+          className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+          aria-hidden
+        />
+      ) : (
+        <Circle className="h-4 w-4 shrink-0 opacity-35" strokeWidth={1.5} aria-hidden />
+      )}
+      <span>{label}</span>
+    </div>
+  )
 }
 
 export function AuthForm({ mode }: AuthFormProps) {
@@ -30,6 +71,10 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [emailBlurred, setEmailBlurred] = useState(false)
+  const [passwordBlurred, setPasswordBlurred] = useState(false)
+  const [passwordRulesOpen, setPasswordRulesOpen] = useState(false)
 
   const isLogin = mode === "login"
   const title = isLogin ? "Welcome back" : "Create your account"
@@ -41,14 +86,38 @@ export function AuthForm({ mode }: AuthFormProps) {
   const altLink = isLogin ? "/signup" : "/login"
   const altLabel = isLogin ? "Sign up" : "Sign in"
 
+  const emailError = useMemo(() => validateAuthEmail(email), [email])
+  const passwordError = useMemo(
+    () =>
+      isLogin ? validateLoginPassword(password) : validateSignupPassword(password),
+    [isLogin, password],
+  )
+  const showEmailError = emailBlurred || submitAttempted
+  const showPasswordError = passwordBlurred || submitAttempted
+
+  const signupRules = useMemo(
+    () => (isLogin ? null : getSignupPasswordRules(password)),
+    [isLogin, password],
+  )
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setSubmitAttempted(true)
     setError(null)
+
+    const eErr = validateAuthEmail(email)
+    const pErr = isLogin
+      ? validateLoginPassword(password)
+      : validateSignupPassword(password)
+    if (eErr || pErr) {
+      return
+    }
+
     setPending(true)
 
     const result = isLogin
-      ? await login(email, password)
-      : await signup(email, password)
+      ? await login(email.trim(), password)
+      : await signup(email.trim(), password)
 
     setPending(false)
 
@@ -58,6 +127,9 @@ export function AuthForm({ mode }: AuthFormProps) {
       setError(result.error ?? "Something went wrong.")
     }
   }
+
+  const emailInvalid = showEmailError && emailError !== null
+  const passwordInvalid = showPasswordError && passwordError !== null
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4">
@@ -100,7 +172,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
               {/* Error banner */}
               {error && (
                 <div className="flex items-start gap-2.5 rounded-none border border-destructive/30 bg-destructive/5 px-4 py-3.5 text-sm text-destructive animate-fade-in">
@@ -114,24 +186,91 @@ export function AuthForm({ mode }: AuthFormProps) {
                 <Label htmlFor="email" className="font-label text-sm font-medium text-foreground/90">
                   Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  autoFocus
-                  className="h-11 rounded-lg border-border/80 bg-background/50 transition-colors focus-visible:bg-background"
-                />
+                <div className="relative">
+                  <Mail
+                    className={cn(
+                      "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors",
+                      showEmailError && emailInvalid ? "text-destructive/80" : "text-muted-foreground/60",
+                    )}
+                    aria-hidden
+                  />
+                  <Input
+                    id="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => setEmailBlurred(true)}
+                    autoFocus
+                    aria-invalid={emailInvalid}
+                    aria-describedby={emailInvalid ? "email-error" : undefined}
+                    className={cn(
+                      "h-11 rounded-lg border-border/80 bg-background/50 pl-10 pr-3 transition-colors focus-visible:bg-background",
+                      emailInvalid &&
+                        "border-destructive/50 focus-visible:border-destructive focus-visible:ring-destructive/20",
+                      !emailInvalid &&
+                        email.trim() &&
+                        !emailError &&
+                        "border-emerald-500/30 focus-visible:border-emerald-500/50",
+                    )}
+                  />
+                </div>
+                {emailInvalid && (
+                  <p id="email-error" className="text-sm text-destructive animate-fade-in">
+                    {emailError}
+                  </p>
+                )}
               </div>
 
               {/* Password */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password" className="font-label text-sm font-medium text-foreground/90">
-                  Password
-                </Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label
+                    htmlFor="password"
+                    className="font-label text-sm font-medium text-foreground/90"
+                  >
+                    Password
+                  </Label>
+                  {!isLogin && signupRules && (
+                    <Popover
+                      open={passwordRulesOpen}
+                      onOpenChange={setPasswordRulesOpen}
+                      modal={false}
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label="View password requirements"
+                        >
+                          <Info className="h-3.5 w-3.5" aria-hidden />
+                          Requirements
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        align="start"
+                        sideOffset={8}
+                        className="w-72 border-border/60 bg-popover/95 p-4 shadow-lg backdrop-blur-sm"
+                      >
+                        <p className="mb-3 font-label text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Password rules
+                        </p>
+                        <div className="space-y-2.5">
+                          <RuleRow
+                            met={signupRules.minLen}
+                            label={`At least ${PASSWORD_MIN_SIGNUP} characters`}
+                          />
+                          <RuleRow met={signupRules.hasUpper} label="One uppercase letter" />
+                          <RuleRow met={signupRules.hasLower} label="One lowercase letter" />
+                          <RuleRow met={signupRules.hasDigit} label="One number" />
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -139,10 +278,23 @@ export function AuthForm({ mode }: AuthFormProps) {
                     placeholder={isLogin ? "Enter your password" : "Create a password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
+                    onFocus={() => {
+                      if (!isLogin) setPasswordRulesOpen(true)
+                    }}
+                    onBlur={() => setPasswordBlurred(true)}
                     autoComplete={isLogin ? "current-password" : "new-password"}
-                    className="h-11 rounded-lg border-border/80 bg-background/50 pr-11 transition-colors focus-visible:bg-background"
+                    maxLength={PASSWORD_MAX}
+                    aria-invalid={passwordInvalid}
+                    aria-describedby={passwordInvalid ? "password-error" : undefined}
+                    className={cn(
+                      "h-11 rounded-lg border-border/80 bg-background/50 pr-11 transition-colors focus-visible:bg-background",
+                      passwordInvalid &&
+                        "border-destructive/50 focus-visible:border-destructive focus-visible:ring-destructive/20",
+                      !passwordInvalid &&
+                        password &&
+                        !passwordError &&
+                        "border-emerald-500/30 focus-visible:border-emerald-500/50",
+                    )}
                   />
                   <button
                     type="button"
@@ -157,6 +309,11 @@ export function AuthForm({ mode }: AuthFormProps) {
                     )}
                   </button>
                 </div>
+                {passwordInvalid && (
+                  <p id="password-error" className="text-sm text-destructive animate-fade-in">
+                    {passwordError}
+                  </p>
+                )}
               </div>
 
               {/* Submit */}

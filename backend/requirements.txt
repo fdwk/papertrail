@@ -1,4 +1,5 @@
 alembic==1.18.4
+argon2-cffi==25.1.0
 fastapi==0.111.0
 h2==4.3.0
 hpack==4.1.0
@@ -11,6 +12,7 @@ psycopg2-binary==2.9.7
 pydantic==2.5.1
 pydantic_core==2.14.3
 python-dotenv==1.0.1
+resend==2.27.0
 SQLAlchemy==2.0.21
 starlette==0.37.2
 typer==0.20.0

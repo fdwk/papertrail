@@ -28,6 +28,7 @@ if __name__ == "__main__":
 from app.database import SessionLocal
 from app.mock_data import _id as mock_id
 from app.models import User, Trail, Paper, UserPaper, PaperGraphEdge
+from app.passwords import hash_password
 
 SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "papertrail-seed")
 
@@ -45,23 +46,24 @@ def load_seed_data() -> list[dict]:
 def seed(session=None):
     data = load_seed_data()
 
-    # Demo user: matches mock_data so login (demo@papertrail.dev / password123) works.
+    # Demo user: login demo@papertrail.dev / Password123
     demo_user_id = mock_id("user-demo")
+    demo_password_hash = hash_password("Password123")
     user = session.get(User, demo_user_id)
     if not user:
         user = User(
             id=demo_user_id,
             email="demo@papertrail.dev",
-            password_hash="password123",  # plaintext; mock auth compares directly
+            password_hash=demo_password_hash,
             date_created=datetime.now(timezone.utc),
             tier="Scholar",
         )
         session.add(user)
         session.flush()
     else:
-        # Default the seeded demo account to Scholar for the upgrade/plan UI.
-        # Keep other user fields untouched.
         user.tier = "Scholar"
+        if not user.password_hash.startswith("$argon2"):
+            user.password_hash = demo_password_hash
 
     # Collect all papers and node_id -> paper_id mapping
     paper_id_to_uuid: dict[str, uuid.UUID] = {}
@@ -136,7 +138,7 @@ def seed(session=None):
 
     session.commit()
     print(
-        "Seed completed: 1 user (demo@papertrail.dev / password123),",
+        "Seed completed: 1 user (demo@papertrail.dev / Password123),",
         len(paper_id_to_uuid),
         "papers,",
         len(data),
