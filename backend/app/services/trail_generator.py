@@ -378,7 +378,11 @@ async def generate_trail_stream(
             except OpenAlexError as exc:
                 logger.warning("OpenAlex supplementary search failed: %s", exc)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Unexpected error during OpenAlex supplementary search: %s", exc)
+                logger.warning(
+                    "Unexpected error during OpenAlex supplementary search: %s",
+                    exc,
+                    exc_info=True,
+                )
             else:
                 if supplement:
                     yield {
@@ -410,7 +414,7 @@ async def generate_trail_stream(
         logger.warning("GPT suggest_papers failed, falling back to OpenAlex search: %s", exc)
         suggestions = []
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Unexpected error in suggest_papers: %s", exc)
+        logger.warning("Unexpected error in suggest_papers: %s", exc, exc_info=True)
         suggestions = []
 
     for suggestion in suggestions[: config["suggest_limit"]]:
@@ -467,7 +471,11 @@ async def generate_trail_stream(
         except OpenAlexError as exc:
             logger.warning("OpenAlex supplementary search failed: %s", exc)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during OpenAlex supplementary search: %s", exc)
+            logger.warning(
+                "Unexpected error during OpenAlex supplementary search: %s",
+                exc,
+                exc_info=True,
+            )
 
     for paper in supplement:
         paper_id = (paper.get("openalex_id") or "").strip()

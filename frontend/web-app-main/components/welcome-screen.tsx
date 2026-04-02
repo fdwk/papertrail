@@ -1,6 +1,15 @@
 "use client"
 
-import { useState, useMemo, type FormEvent } from "react"
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+  useId,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react"
 import {
   ArrowRight,
   Sparkles,
@@ -10,12 +19,17 @@ import {
   TrendingUp,
   Clock,
   FileText,
+  Loader2,
 } from "lucide-react"
 import { ThemeToggle } from "./theme-toggle"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { TrailSize, TrailSummary } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
+import {
+  useOpenAlexAutocomplete,
+  type AutocompleteSuggestion,
+} from "@/lib/hooks/use-openalex-autocomplete"
 
 interface WelcomeScreenProps {
   onCreateTrail: (topic: string, size: TrailSize) => Promise<void> | void
@@ -58,8 +72,89 @@ export function WelcomeScreen({
   const { user } = useAuth()
   const [topic, setTopic] = useState("")
   const [trailSize, setTrailSize] = useState<TrailSize>("medium")
+  const [panelDismissed, setPanelDismissed] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listboxId = useId()
+  const { suggestions, loading } = useOpenAlexAutocomplete(topic)
   const greeting = useMemo(() => getGreeting(), [])
   const currentPlanLabel = `${user?.tier ?? "Reader"} plan`
+
+  const showPanel =
+    !panelDismissed &&
+    topic.trim().length >= 2 &&
+    !isCreating &&
+    (suggestions.length > 0 || loading)
+
+  const closePanel = useCallback(() => {
+    setPanelDismissed(true)
+  }, [])
+
+  const applySuggestion = useCallback((s: AutocompleteSuggestion) => {
+    const text = s.display_name
+    closePanel()
+    setSelectedIndex(-1)
+    setTopic(text)
+    window.setTimeout(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      const len = text.length
+      el.setSelectionRange(len, len)
+    }, 0)
+  }, [closePanel])
+
+  useEffect(() => {
+    setSelectedIndex(-1)
+  }, [suggestions])
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setPanelDismissed(true)
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown)
+    return () => document.removeEventListener("mousedown", onDocMouseDown)
+  }, [])
+
+  const handleInputKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        if (showPanel) {
+          e.preventDefault()
+          closePanel()
+        }
+        return
+      }
+      if (e.key === "Tab") {
+        if (showPanel) closePanel()
+        return
+      }
+      if (!showPanel) return
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        const max = suggestions.length - 1
+        if (max < 0) return
+        setSelectedIndex((i) => (i < max ? i + 1 : 0))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        const max = suggestions.length - 1
+        if (max < 0) return
+        setSelectedIndex((i) => (i <= 0 ? max : i - 1))
+        return
+      }
+      if (e.key === "Enter" && selectedIndex >= 0 && suggestions[selectedIndex]) {
+        e.preventDefault()
+        applySuggestion(suggestions[selectedIndex])
+      }
+    },
+    [showPanel, closePanel, suggestions, selectedIndex, applySuggestion],
+  )
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -90,7 +185,12 @@ export function WelcomeScreen({
         <ThemeToggle />
       </div>
 
-      <div className="relative w-full max-w-xl">
+      <div
+        className={cn(
+          "relative w-full max-w-xl",
+          showPanel && "overflow-visible",
+        )}
+      >
         {/* Heading */}
         <div className="mb-12 flex flex-col items-center">
           <p className="animate-fade-up delay-0 font-label text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">
@@ -104,24 +204,98 @@ export function WelcomeScreen({
           </p>
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="animate-fade-up delay-3 relative">
-          <input
-            type="text"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            disabled={isCreating}
-            placeholder="e.g., Transformer Architecture, Reinforcement Learning..."
-            className="w-full border-b-2 border-border bg-transparent px-2 py-4 pr-14 text-base italic text-foreground placeholder:text-muted-foreground/40 placeholder:not-italic transition-all focus:border-primary focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={!topic.trim() || isCreating}
-            className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-primary text-primary-foreground shadow-sm transition-all disabled:opacity-25 hover:bg-primary/90 active:scale-95"
-            aria-label="Create trail"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </button>
+        {/* Input — elevated z-index when suggestions open so panel stacks above Trail Size / siblings */}
+        <form
+          onSubmit={handleSubmit}
+          className={cn(
+            "animate-fade-up delay-3 relative",
+            showPanel && "z-50",
+          )}
+        >
+          <div ref={containerRef} className="relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={topic}
+              onChange={(e) => {
+                setPanelDismissed(false)
+                setTopic(e.target.value)
+              }}
+              onKeyDown={handleInputKeyDown}
+              disabled={isCreating}
+              placeholder="e.g., Transformer Architecture, Reinforcement Learning..."
+              autoComplete="off"
+              role="combobox"
+              aria-expanded={showPanel}
+              aria-controls={listboxId}
+              aria-autocomplete="list"
+              className="w-full border-b-2 border-border bg-transparent px-2 py-4 pr-14 text-base italic text-foreground placeholder:text-muted-foreground/40 placeholder:not-italic transition-all focus:border-primary focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!topic.trim() || isCreating}
+              className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-primary text-primary-foreground shadow-sm transition-all disabled:opacity-25 hover:bg-primary/90 active:scale-95"
+              aria-label="Create trail"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            {showPanel && (
+              <div
+                id={listboxId}
+                role="listbox"
+                className="absolute left-0 right-0 top-full z-[60] mt-2 border border-border/60 bg-card/95 shadow-lg shadow-black/5 backdrop-blur-md dark:shadow-black/25"
+              >
+                {loading && suggestions.length === 0 && (
+                  <div
+                    className="flex items-center gap-2.5 border-b border-border/40 px-3 py-3.5 text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary/70" />
+                    <span className="font-label text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground/70">
+                      Searching concepts…
+                    </span>
+                  </div>
+                )}
+                {suggestions.map((s, idx) => {
+                  const active = idx === selectedIndex
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onMouseDown={(ev) => ev.preventDefault()}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      onClick={() => applySuggestion(s)}
+                      className={cn(
+                        "relative flex w-full flex-col items-start gap-0.5 border-b border-border/40 px-3 py-2.5 text-left transition-colors last:border-b-0",
+                        active
+                          ? "bg-primary/8 text-foreground"
+                          : "bg-transparent text-foreground hover:bg-muted/40",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-0 top-0 h-full w-0.5 bg-primary transition-opacity",
+                          active ? "opacity-100" : "opacity-0",
+                        )}
+                        aria-hidden
+                      />
+                      <span className="pl-2 font-heading text-sm font-semibold leading-snug tracking-tight">
+                        {s.display_name}
+                      </span>
+                      {s.hint ? (
+                        <span className="pl-2 text-[11px] leading-snug text-muted-foreground/85">
+                          {s.hint}
+                        </span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </form>
         <div className="animate-fade-up delay-4 mt-4">
           <div className="mb-2 flex items-center justify-center gap-1.5">
