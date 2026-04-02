@@ -8,8 +8,6 @@ from .trails import router as trails_router
 import logging
 from rich.logging import RichHandler
 
-import resend
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -47,19 +45,6 @@ def read_root():
 def read_poo():
     return {"message": "Pee poo"}
 
-import os
-resend.api_key = os.getenv("RESEND_API_KEY", "").strip()
-
-@app.get("/send-email")
-def send_mail():
-    params: resend.Emails.SendParams = {
-        "from": "Papertrail <no-reply@send.papertrail.wiki>",
-        "to": ["fran.kahng@gmail.com"],
-        "subject": "hello world",
-        "html": "<strong>it works!</strong>",
-    }
-    email: resend.Emails.SendResponse = resend.Emails.send(params)
-    return email
 
 app.include_router(auth_router)
 app.include_router(trails_router)

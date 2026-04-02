@@ -1,4 +1,6 @@
+import { Suspense } from "react"
 import { AuthForm } from "@/components/auth-form"
+import { LoginAuth } from "@/components/login-auth"
 
 export const metadata = {
   title: "Sign in - Papertrail",
@@ -6,5 +8,9 @@ export const metadata = {
 }
 
 export default function LoginPage() {
-  return <AuthForm mode="login" />
+  return (
+    <Suspense fallback={<AuthForm mode="login" />}>
+      <LoginAuth />
+    </Suspense>
+  )
 }

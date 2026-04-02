@@ -1,20 +1,26 @@
 """Auth: mock users, JWT login/signup, get_current_user dependency."""
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import re
+import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
+from urllib.parse import unquote
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import User
+from .email_resend import build_reset_password_url, send_password_reset_email
+from .models import PasswordResetToken, User
 from .passwords import hash_password, verify_password
 from .repositories.trails import (
     count_trails_for_user as count_trails_for_user_db,
@@ -25,6 +31,13 @@ JWT_SECRET = os.getenv("AUTH_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
 JWT_TTL_DAYS = 7
 FREE_TRAIL_LIMIT = 3
+PASSWORD_RESET_TTL = timedelta(hours=1)
+FORGOT_PASSWORD_MESSAGE = (
+    "If an account exists for this email, you will receive password reset instructions shortly."
+)
+RESET_PASSWORD_GENERIC_ERROR = "Invalid or expired reset link."
+
+logger = logging.getLogger("backend")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
@@ -37,6 +50,16 @@ class LoginBody(BaseModel):
     password: str = Field(..., min_length=1, max_length=256)
 
 
+def validate_signup_password_strength(v: str) -> str:
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must include a lowercase letter")
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must include an uppercase letter")
+    if not re.search(r"\d", v):
+        raise ValueError("Password must include a number")
+    return v
+
+
 class SignupBody(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=256)
@@ -44,13 +67,29 @@ class SignupBody(BaseModel):
     @field_validator("password")
     @classmethod
     def password_complexity(cls, v: str) -> str:
-        if not re.search(r"[a-z]", v):
-            raise ValueError("Password must include a lowercase letter")
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Password must include an uppercase letter")
-        if not re.search(r"\d", v):
-            raise ValueError("Password must include a number")
-        return v
+        return validate_signup_password_strength(v)
+
+
+class ForgotPasswordBody(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+
+
+class ResetPasswordBody(BaseModel):
+    token: str = Field(..., min_length=1, max_length=512)
+    password: str = Field(..., min_length=8, max_length=256)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return validate_signup_password_strength(v)
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str
 
 
 class TokenResponse(BaseModel):
@@ -65,6 +104,76 @@ def _create_token(email: str, tier: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(days=JWT_TTL_DAYS)
     payload = {"email": email, "tier": tier, "exp": int(exp.timestamp())}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _hash_reset_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(
+    body: ForgotPasswordBody, db: Session = Depends(get_db)
+) -> ForgotPasswordResponse:
+    """Same response whether or not the email exists (avoid account enumeration)."""
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == body.email.lower())
+        .first()
+    )
+    if user:
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        ).delete(synchronize_session=False)
+        raw = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
+        token_row = PasswordResetToken(
+            user_id=user.id,
+            token_hash=_hash_reset_token(raw),
+            expires_at=now + PASSWORD_RESET_TTL,
+            created_at=now,
+        )
+        db.add(token_row)
+        db.commit()
+        reset_url = build_reset_password_url(raw)
+        try:
+            send_password_reset_email(user.email, reset_url)
+        except Exception:
+            logger.exception("Failed to send password reset email")
+    return ForgotPasswordResponse(message=FORGOT_PASSWORD_MESSAGE)
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+def reset_password(
+    body: ResetPasswordBody, db: Session = Depends(get_db)
+) -> ResetPasswordResponse:
+    raw = unquote(body.token.strip())
+    token_hash = _hash_reset_token(raw)
+    now = datetime.now(timezone.utc)
+    row = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token_hash == token_hash)
+        .first()
+    )
+    if (
+        row is None
+        or row.used_at is not None
+        or row.expires_at < now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=RESET_PASSWORD_GENERIC_ERROR,
+        )
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=RESET_PASSWORD_GENERIC_ERROR,
+        )
+    user.password_hash = hash_password(body.password)
+    row.used_at = now
+    db.commit()
+    return ResetPasswordResponse(message="Your password has been reset. You can sign in now.")
 
 
 def get_current_user_id(
