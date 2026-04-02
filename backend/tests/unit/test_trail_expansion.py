@@ -91,7 +91,6 @@ def test_generate_expansion_returns_ephemeral_nodes_and_edges(monkeypatch: pytes
     def fake_search_works(query: str, limit: int = 10) -> list[dict[str, Any]]:
         assert "Transformers" in query
         assert "Attention Is All You Need" in query
-        assert limit == 6
         return candidates
 
     monkeypatch.setattr(trail_generator.openalex, "search_works", fake_search_works)

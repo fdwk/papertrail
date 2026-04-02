@@ -39,6 +39,8 @@ import {
 
 interface AuthFormProps {
   mode: "login" | "signup"
+  /** Shown on login after a successful password reset redirect. */
+  passwordResetSuccess?: boolean
 }
 
 function RuleRow({ met, label }: { met: boolean; label: string }) {
@@ -62,7 +64,7 @@ function RuleRow({ met, label }: { met: boolean; label: string }) {
   )
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, passwordResetSuccess = false }: AuthFormProps) {
   const router = useRouter()
   const { login, signup } = useAuth()
 
@@ -173,6 +175,12 @@ export function AuthForm({ mode }: AuthFormProps) {
 
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+              {isLogin && passwordResetSuccess && (
+                <div className="flex items-start gap-2.5 rounded-none border border-emerald-500/30 bg-emerald-500/5 px-4 py-3.5 text-sm text-emerald-800 dark:text-emerald-400 animate-fade-in">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <span>Your password was reset. Sign in with your new password.</span>
+                </div>
+              )}
               {/* Error banner */}
               {error && (
                 <div className="flex items-start gap-2.5 rounded-none border border-destructive/30 bg-destructive/5 px-4 py-3.5 text-sm text-destructive animate-fade-in">
@@ -233,43 +241,53 @@ export function AuthForm({ mode }: AuthFormProps) {
                   >
                     Password
                   </Label>
-                  {!isLogin && signupRules && (
-                    <Popover
-                      open={passwordRulesOpen}
-                      onOpenChange={setPasswordRulesOpen}
-                      modal={false}
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label="View password requirements"
-                        >
-                          <Info className="h-3.5 w-3.5" aria-hidden />
-                          Requirements
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        side="right"
-                        align="start"
-                        sideOffset={8}
-                        className="w-72 border-border/60 bg-popover/95 p-4 shadow-lg backdrop-blur-sm"
+                  <div className="flex items-center gap-2">
+                    {isLogin && (
+                      <Link
+                        href="/forgot-password"
+                        className="text-xs font-medium text-primary underline-offset-4 transition-colors hover:text-primary/90 hover:underline"
                       >
-                        <p className="mb-3 font-label text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Password rules
-                        </p>
-                        <div className="space-y-2.5">
-                          <RuleRow
-                            met={signupRules.minLen}
-                            label={`At least ${PASSWORD_MIN_SIGNUP} characters`}
-                          />
-                          <RuleRow met={signupRules.hasUpper} label="One uppercase letter" />
-                          <RuleRow met={signupRules.hasLower} label="One lowercase letter" />
-                          <RuleRow met={signupRules.hasDigit} label="One number" />
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                        Forgot password?
+                      </Link>
+                    )}
+                    {!isLogin && signupRules && (
+                      <Popover
+                        open={passwordRulesOpen}
+                        onOpenChange={setPasswordRulesOpen}
+                        modal={false}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="View password requirements"
+                          >
+                            <Info className="h-3.5 w-3.5" aria-hidden />
+                            Requirements
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          side="right"
+                          align="start"
+                          sideOffset={8}
+                          className="w-72 border-border/60 bg-popover/95 p-4 shadow-lg backdrop-blur-sm"
+                        >
+                          <p className="mb-3 font-label text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Password rules
+                          </p>
+                          <div className="space-y-2.5">
+                            <RuleRow
+                              met={signupRules.minLen}
+                              label={`At least ${PASSWORD_MIN_SIGNUP} characters`}
+                            />
+                            <RuleRow met={signupRules.hasUpper} label="One uppercase letter" />
+                            <RuleRow met={signupRules.hasLower} label="One lowercase letter" />
+                            <RuleRow met={signupRules.hasDigit} label="One number" />
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </div>
                 <div className="relative">
                   <Input

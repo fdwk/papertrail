@@ -30,6 +30,9 @@ def test_create_trail_uses_generator(monkeypatch) -> None:  # noqa: ANN001
         )
 
     monkeypatch.setattr(trails_module, "generate_trail", fake_generate_trail)
+    monkeypatch.setattr(
+        trails_module, "_enforce_trail_limit_for_user", lambda _db, _user_id: None
+    )
 
     with TestClient(app) as client:
         response = client.post("/trails/", json={"topic": "Transformer Architecture", "size": "small"})
@@ -59,6 +62,9 @@ def test_create_trail_falls_back_to_random_when_generation_fails(monkeypatch) ->
 
     monkeypatch.setattr(trails_module, "generate_trail", fake_generate_trail)
     monkeypatch.setattr(trails_module, "create_trail_with_random_graph_db", fake_random)
+    monkeypatch.setattr(
+        trails_module, "_enforce_trail_limit_for_user", lambda _db, _user_id: None
+    )
 
     with TestClient(app) as client:
         response = client.post("/trails/", json={"topic": "Fallback Topic"})
