@@ -1,6 +1,7 @@
 """Auth: mock users, JWT login/signup, get_current_user dependency."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -9,17 +10,25 @@ import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
-from urllib.parse import unquote
+from urllib.parse import quote, unquote, urlencode
 
+import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.oauth2 import id_token
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .email_resend import build_reset_password_url, send_password_reset_email
+from .email_resend import (
+    build_reset_password_url,
+    public_web_app_url,
+    send_password_reset_email,
+)
 from .models import PasswordResetToken, User
 from .passwords import hash_password, verify_password
 from .repositories.trails import (
@@ -36,6 +45,14 @@ FORGOT_PASSWORD_MESSAGE = (
     "If an account exists for this email, you will receive password reset instructions shortly."
 )
 RESET_PASSWORD_GENERIC_ERROR = "Invalid or expired reset link."
+GOOGLE_ONLY_LOGIN_DETAIL = (
+    "This account uses Google sign-in. Please sign in with Google."
+)
+
+GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+GOOGLE_OAUTH_STATE_COOKIE = "oauth_google_state"
+GOOGLE_OAUTH_STATE_MAX_AGE = 600
 
 logger = logging.getLogger("backend")
 
@@ -108,6 +125,199 @@ def _create_token(email: str, tier: str) -> str:
 
 def _hash_reset_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _frontend_base_url() -> str:
+    return public_web_app_url()
+
+
+def _oauth_cookie_secure(redirect_uri: str) -> bool:
+    u = redirect_uri.strip().lower()
+    return u.startswith("https://")
+
+
+@contextlib.contextmanager
+def _google_oauth_https_env():
+    """
+    httpx and google-auth/requests read SSL_CERT_FILE / SSL_CERT_DIR from the environment.
+    Conda/WSL setups often set these to paths that do not exist on Windows -> FileNotFoundError.
+    Temporarily unset invalid entries for the Google token + JWKS calls only.
+    """
+    removed: dict[str, str] = {}
+    for key, check_file in (("SSL_CERT_FILE", True), ("SSL_CERT_DIR", False)):
+        val = os.environ.get(key)
+        if not val:
+            continue
+        ok = os.path.isfile(val) if check_file else os.path.isdir(val)
+        if not ok:
+            removed[key] = val
+            del os.environ[key]
+    try:
+        yield
+    finally:
+        for k, v in removed.items():
+            os.environ[k] = v
+
+
+def _redirect_oauth_error(message: str) -> RedirectResponse:
+    base = _frontend_base_url()
+    url = f"{base}/login?oauth_error={quote(message)}"
+    resp = RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+    resp.delete_cookie(GOOGLE_OAUTH_STATE_COOKIE, path="/")
+    return resp
+
+
+def _redirect_oauth_success(jwt_token: str) -> RedirectResponse:
+    base = _frontend_base_url()
+    url = f"{base}/auth/callback?token={quote(jwt_token, safe='')}"
+    resp = RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+    resp.delete_cookie(GOOGLE_OAUTH_STATE_COOKIE, path="/")
+    return resp
+
+
+@router.get("/google")
+def google_oauth_start() -> RedirectResponse:
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+    if not client_id or not redirect_uri:
+        return _redirect_oauth_error("Google sign-in is not configured.")
+
+    state = secrets.token_urlsafe(32)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    auth_url = f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
+    resp = RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key=GOOGLE_OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=GOOGLE_OAUTH_STATE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=_oauth_cookie_secure(redirect_uri),
+        path="/",
+    )
+    return resp
+
+
+@router.get("/google/callback")
+def google_oauth_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Exchange Google auth code, verify ID token, issue same JWT as password login."""
+    if error:
+        if error == "access_denied":
+            return _redirect_oauth_error("Google sign-in was cancelled.")
+        return _redirect_oauth_error("Google sign-in failed. Please try again.")
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+    if not client_id or not client_secret or not redirect_uri:
+        return _redirect_oauth_error("Google sign-in is not configured.")
+
+    cookie_state = request.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)
+    if (
+        not code
+        or not state
+        or not cookie_state
+        or not secrets.compare_digest(cookie_state, state)
+    ):
+        logger.warning(
+            "Google OAuth callback: invalid or missing state "
+            "(use the same host for API and GOOGLE_REDIRECT_URI, e.g. only localhost or only 127.0.0.1)"
+        )
+        return _redirect_oauth_error("Sign-in session expired. Please try again.")
+
+    try:
+        with _google_oauth_https_env():
+            with httpx.Client(trust_env=False) as client:
+                token_res = client.post(
+                    GOOGLE_TOKEN_ENDPOINT,
+                    data={
+                        "code": code,
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "redirect_uri": redirect_uri,
+                        "grant_type": "authorization_code",
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=30.0,
+                )
+                token_res.raise_for_status()
+                token_json = token_res.json()
+    except (httpx.HTTPError, ValueError, OSError) as exc:
+        logger.exception("Google token exchange failed: %s", exc)
+        return _redirect_oauth_error(
+            "Could not complete Google sign-in. Please try again."
+        )
+
+    id_token_str = token_json.get("id_token")
+    if not id_token_str or not isinstance(id_token_str, str):
+        logger.warning("Google token response missing id_token")
+        return _redirect_oauth_error(
+            "Could not complete Google sign-in. Please try again."
+        )
+
+    try:
+        with _google_oauth_https_env():
+            info = id_token.verify_oauth2_token(
+                id_token_str,
+                GoogleAuthRequest(),
+                client_id,
+            )
+    except ValueError:
+        logger.exception("Google ID token verification failed")
+        return _redirect_oauth_error(
+            "Google sign-in could not be verified. Please try again."
+        )
+
+    email = info.get("email")
+    if not email or not isinstance(email, str):
+        return _redirect_oauth_error(
+            "Your Google account did not provide an email address."
+        )
+    if info.get("email_verified") is False:
+        return _redirect_oauth_error(
+            "Your Google email is not verified. Please verify it and try again."
+        )
+
+    email = email.strip()
+    display_name = info.get("name")
+    if display_name is not None and not isinstance(display_name, str):
+        display_name = None
+
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == email.lower())
+        .first()
+    )
+    if user is None:
+        user = User(
+            email=email,
+            password_hash=None,
+            name=display_name,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    elif display_name and not user.name:
+        user.name = display_name
+        db.commit()
+        db.refresh(user)
+
+    jwt_token = _create_token(user.email, user.tier)
+    return _redirect_oauth_success(jwt_token)
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
@@ -237,6 +447,11 @@ def login(body: LoginBody, db: Session = Depends(get_db)) -> TokenResponse:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
+        )
+    if not db_user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=GOOGLE_ONLY_LOGIN_DETAIL,
         )
     ok, new_hash = verify_password(db_user.password_hash, body.password)
     if not ok:

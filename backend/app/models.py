@@ -30,7 +30,7 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
-    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     # Account plan tier used by the upgrade page and sidebar indicator.
     tier: Mapped[str] = mapped_column(String, nullable=False, default="Reader")
 

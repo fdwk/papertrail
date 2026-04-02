@@ -3,7 +3,7 @@
  */
 
 const AUTH_API_BASE = "/api/auth"
-const BACKEND_API_BASE =
+export const BACKEND_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000"

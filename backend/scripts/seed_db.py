@@ -62,7 +62,7 @@ def seed(session=None):
         session.flush()
     else:
         user.tier = "Scholar"
-        if not user.password_hash.startswith("$argon2"):
+        if not user.password_hash or not user.password_hash.startswith("$argon2"):
             user.password_hash = demo_password_hash
 
     # Collect all papers and node_id -> paper_id mapping
