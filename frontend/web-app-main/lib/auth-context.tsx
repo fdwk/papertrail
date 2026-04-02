@@ -14,6 +14,8 @@ interface AuthContextValue {
   isLoading: boolean
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>
   signup: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>
+  /** Set session from a JWT (e.g. Google OAuth redirect). */
+  loginWithToken: (token: string) => void
   logout: () => void
 }
 
@@ -98,6 +100,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: false, error: msg ?? "Signup failed. Please try again." }
   }, [])
 
+  const loginWithToken = useCallback((token: string) => {
+    const payload = decodePayload(token)
+    if (!payload?.email) {
+      localStorage.removeItem("jwt_token")
+      setUser(null)
+      return
+    }
+    if (isTokenExpired(token)) {
+      localStorage.removeItem("jwt_token")
+      setUser(null)
+      return
+    }
+    localStorage.setItem("jwt_token", token)
+    setUser({
+      email: payload.email,
+      tier: payload.tier ?? "Reader",
+    })
+  }, [])
+
   const logout = useCallback(() => {
     localStorage.removeItem("jwt_token")
     setUser(null)
@@ -111,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         signup,
+        loginWithToken,
         logout,
       }}
     >

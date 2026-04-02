@@ -42,6 +42,8 @@ def main() -> None:
         users = session.query(User).all()
         updated = 0
         for u in users:
+            if not u.password_hash:
+                continue
             if u.password_hash.startswith("$argon2"):
                 continue
             u.password_hash = hash_password(u.password_hash)

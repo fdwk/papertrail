@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { AuthForm } from "@/components/auth-form"
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 }
 
 export default function SignupPage() {
-  return <AuthForm mode="signup" />
+  return (
+    <Suspense fallback={<AuthForm mode="signup" />}>
+      <AuthForm mode="signup" />
+    </Suspense>
+  )
 }
