@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json as _json
 import logging
 import os
 import re
 import secrets
+import time as _time
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
@@ -56,6 +58,20 @@ GOOGLE_OAUTH_STATE_COOKIE = "oauth_google_state"
 GOOGLE_OAUTH_STATE_MAX_AGE = 3600
 
 logger = logging.getLogger("backend")
+
+# #region agent log
+def _dbg(loc: str, msg: str, data: dict | None = None, hyp: str = "") -> None:
+    """Debug session 753cad — writes NDJSON + Python logger."""
+    payload = {"sessionId": "753cad", "location": loc, "message": msg, "data": data or {}, "timestamp": int(_time.time() * 1000)}
+    if hyp:
+        payload["hypothesisId"] = hyp
+    logger.info("[DBG-753cad] %s | %s | %s", loc, msg, _json.dumps(data or {}))
+    try:
+        with open("debug-753cad.log", "a") as _f:
+            _f.write(_json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
@@ -204,16 +220,28 @@ def google_oauth_start() -> RedirectResponse:
     }
     auth_url = f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
     resp = RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
+    _is_secure = _oauth_cookie_secure(redirect_uri)
     resp.set_cookie(
         key=GOOGLE_OAUTH_STATE_COOKIE,
         value=state,
         max_age=GOOGLE_OAUTH_STATE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=_oauth_cookie_secure(redirect_uri),
+        secure=_is_secure,
         path="/",
     )
     _oauth_no_store_headers(resp)
+    # #region agent log
+    _dbg("auth.py:google_start", "OAuth start — setting cookie", {
+        "state_prefix": state[:10],
+        "redirect_uri": redirect_uri,
+        "secure_flag": _is_secure,
+        "client_id_present": bool(client_id),
+        "cookie_name": GOOGLE_OAUTH_STATE_COOKIE,
+        "max_age": GOOGLE_OAUTH_STATE_MAX_AGE,
+        "set_cookie_header": resp.headers.get("set-cookie", "NOT_FOUND"),
+    }, hyp="A")
+    # #endregion
     return resp
 
 
@@ -238,12 +266,45 @@ def google_oauth_callback(
         return _redirect_oauth_error("Google sign-in is not configured.")
 
     cookie_state = request.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)
+    # #region agent log
+    _dbg("auth.py:google_callback", "Callback received — inspecting request", {
+        "has_code": bool(code),
+        "has_state_param": bool(state),
+        "state_param_prefix": state[:10] if state else None,
+        "has_cookie_state": bool(cookie_state),
+        "cookie_state_prefix": cookie_state[:10] if cookie_state else None,
+        "all_cookie_keys": list(request.cookies.keys()),
+        "cookie_header_raw": request.headers.get("cookie", "EMPTY"),
+        "host_header": request.headers.get("host"),
+        "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
+        "x_forwarded_host": request.headers.get("x-forwarded-host"),
+        "referer": request.headers.get("referer"),
+        "redirect_uri_env": redirect_uri,
+    }, hyp="A,B,D,E")
+    # #endregion
     if (
         not code
         or not state
         or not cookie_state
         or not secrets.compare_digest(cookie_state, state)
     ):
+        # #region agent log
+        _fail_reasons = []
+        if not code:
+            _fail_reasons.append("code_missing")
+        if not state:
+            _fail_reasons.append("state_param_missing")
+        if not cookie_state:
+            _fail_reasons.append("cookie_state_missing")
+        if code and state and cookie_state:
+            _fail_reasons.append("state_mismatch")
+        _dbg("auth.py:google_callback", "STATE CHECK FAILED", {
+            "fail_reasons": _fail_reasons,
+            "code_present": bool(code),
+            "state_present": bool(state),
+            "cookie_state_present": bool(cookie_state),
+        }, hyp="A,B,C,D")
+        # #endregion
         logger.warning(
             "Google OAuth callback: invalid or missing state "
             "(match API host to GOOGLE_REDIRECT_URI; avoid 127.0.0.1 vs localhost mix; "
