@@ -6,6 +6,9 @@ from typing import Any
 
 import httpx
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 OPENALEX_BASE_URL = "https://api.openalex.org"
 DEFAULT_TIMEOUT_SECONDS = 15.0
@@ -226,8 +229,8 @@ async def async_search_works(query: str, limit: int = 10) -> list[dict[str, Any]
     data = await _async_get(
         "/works",
         params={
-            "search": query,
-            "sort": "cited_by_count:desc",
+            "search.semantic": query,
+            "sort": "relevance_score:desc",
             "per_page": max(1, min(limit, 25)),
         },
     )
