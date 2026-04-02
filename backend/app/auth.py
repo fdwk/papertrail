@@ -52,7 +52,8 @@ GOOGLE_ONLY_LOGIN_DETAIL = (
 GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_OAUTH_STATE_COOKIE = "oauth_google_state"
-GOOGLE_OAUTH_STATE_MAX_AGE = 600
+# Allow slow account picker / 2FA; cached /auth/google 302s without Set-Cookie also look like "missing state".
+GOOGLE_OAUTH_STATE_MAX_AGE = 3600
 
 logger = logging.getLogger("backend")
 
@@ -136,6 +137,13 @@ def _oauth_cookie_secure(redirect_uri: str) -> bool:
     return u.startswith("https://")
 
 
+def _oauth_no_store_headers(resp: RedirectResponse) -> None:
+    """Prevent CDN/browser from caching OAuth redirects (304 breaks Set-Cookie + state pairing)."""
+    resp.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+
+
 @contextlib.contextmanager
 def _google_oauth_https_env():
     """
@@ -164,6 +172,7 @@ def _redirect_oauth_error(message: str) -> RedirectResponse:
     url = f"{base}/login?oauth_error={quote(message)}"
     resp = RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(GOOGLE_OAUTH_STATE_COOKIE, path="/")
+    _oauth_no_store_headers(resp)
     return resp
 
 
@@ -172,6 +181,7 @@ def _redirect_oauth_success(jwt_token: str) -> RedirectResponse:
     url = f"{base}/auth/callback?token={quote(jwt_token, safe='')}"
     resp = RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(GOOGLE_OAUTH_STATE_COOKIE, path="/")
+    _oauth_no_store_headers(resp)
     return resp
 
 
@@ -203,6 +213,7 @@ def google_oauth_start() -> RedirectResponse:
         secure=_oauth_cookie_secure(redirect_uri),
         path="/",
     )
+    _oauth_no_store_headers(resp)
     return resp
 
 
@@ -235,7 +246,8 @@ def google_oauth_callback(
     ):
         logger.warning(
             "Google OAuth callback: invalid or missing state "
-            "(use the same host for API and GOOGLE_REDIRECT_URI, e.g. only localhost or only 127.0.0.1)"
+            "(match API host to GOOGLE_REDIRECT_URI; avoid 127.0.0.1 vs localhost mix; "
+            "ensure CDN/proxy does not cache /auth/google — OAuth responses use Cache-Control: no-store)"
         )
         return _redirect_oauth_error("Sign-in session expired. Please try again.")
 
