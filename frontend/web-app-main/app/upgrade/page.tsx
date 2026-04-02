@@ -335,7 +335,7 @@ export default function UpgradePage() {
           <p className="text-sm italic text-muted-foreground">
             Questions?{" "}
             <a
-              href="mailto:support@papertrail.app"
+              href="mailto:support@papertrail.wiki"
               className="not-italic font-medium text-primary underline-offset-4 hover:underline"
             >
               Reach out to our team
