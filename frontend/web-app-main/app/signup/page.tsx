@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { AuthForm } from "@/components/auth-form"
+import { SignupAuth } from "@/components/signup-auth"
 
 export const metadata = {
   title: "Sign up - Papertrail",
@@ -9,7 +10,7 @@ export const metadata = {
 export default function SignupPage() {
   return (
     <Suspense fallback={<AuthForm mode="signup" />}>
-      <AuthForm mode="signup" />
+      <SignupAuth />
     </Suspense>
   )
 }

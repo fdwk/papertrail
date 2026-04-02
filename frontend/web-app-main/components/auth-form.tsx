@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { BACKEND_API_BASE } from "@/lib/api-client"
 import {
@@ -42,6 +42,8 @@ interface AuthFormProps {
   mode: "login" | "signup"
   /** Shown on login after a successful password reset redirect. */
   passwordResetSuccess?: boolean
+  /** OAuth error message from ?oauth_error= (read by page wrapper inside Suspense). */
+  oauthErrorFromUrl?: string | null
 }
 
 function GoogleMark({ className }: { className?: string }) {
@@ -88,11 +90,13 @@ function RuleRow({ met, label }: { met: boolean; label: string }) {
   )
 }
 
-export function AuthForm({ mode, passwordResetSuccess = false }: AuthFormProps) {
+export function AuthForm({
+  mode,
+  passwordResetSuccess = false,
+  oauthErrorFromUrl = null,
+}: AuthFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { login, signup } = useAuth()
-  const oauthErrorParam = searchParams.get("oauth_error")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -158,7 +162,7 @@ export function AuthForm({ mode, passwordResetSuccess = false }: AuthFormProps) 
 
   const emailInvalid = showEmailError && emailError !== null
   const passwordInvalid = showPasswordError && passwordError !== null
-  const bannerMessage = error ?? oauthErrorParam
+  const bannerMessage = error ?? oauthErrorFromUrl
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4">
