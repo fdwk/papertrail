@@ -27,6 +27,8 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "https://papertrail-frontend-production.up.railway.app",
+        "https://www.papertrail.wiki",
+        "https://papertrail.wiki",
     ],
     allow_credentials=True,
     allow_methods=["*"],
