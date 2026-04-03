@@ -72,9 +72,13 @@ def test_generate_expansion_returns_ephemeral_nodes_and_edges(monkeypatch: pytes
     user_id = uuid.uuid4()
     trail_id = uuid.uuid4()
     source_id = uuid.uuid4()
+    other_id = uuid.uuid4()
 
     trail = Trail(id=trail_id, user_id=user_id, topic="Transformers")  # type: ignore[arg-type]
     source_paper = Paper(id=source_id, title="Attention Is All You Need")  # type: ignore[arg-type]
+    trail.edges = [
+        PaperGraphEdge(paper_id=source_id, trail_id=trail_id, next_node_id=other_id),  # type: ignore[list-item]
+    ]
 
     store: dict[type, Any] = {
         Trail: trail,
@@ -137,9 +141,13 @@ def test_apply_expansion_creates_papers_edges_and_returns_detail(monkeypatch: py
     user_id = uuid.uuid4()
     trail_id = uuid.uuid4()
     source_id = uuid.uuid4()
+    other_id = uuid.uuid4()
 
     trail = Trail(id=trail_id, user_id=user_id, topic="Transformers")  # type: ignore[arg-type]
     source_paper = Paper(id=source_id, title="Attention Is All You Need")  # type: ignore[arg-type]
+    trail.edges = [
+        PaperGraphEdge(paper_id=source_id, trail_id=trail_id, next_node_id=other_id),  # type: ignore[list-item]
+    ]
 
     store: dict[type, Any] = {
         Trail: trail,

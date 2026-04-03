@@ -6,12 +6,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from app.schemas import TrailSize
 
 
 DEFAULT_MODEL = "gpt-4o-mini"
+OPENAI_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 SIZE_CONSTRAINTS: dict[TrailSize, dict[str, int]] = {
     "small": {"suggest_min": 6, "suggest_max": 8, "min_papers": 4, "max_papers": 6},
     "medium": {"suggest_min": 10, "suggest_max": 15, "min_papers": 6, "max_papers": 10},
@@ -27,7 +29,7 @@ def _client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise OpenAIClientError("OPENAI_API_KEY is not set.")
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT)
 
 
 def _model() -> str:
@@ -130,37 +132,37 @@ def suggest_papers(topic: str, size: TrailSize = "medium") -> list[dict[str, Any
     return normalized[: constraints["suggest_max"]]
 
 
-def select_and_order_papers(
+def enrich_edges_with_gpt(
     topic: str,
-    verified_papers: list[dict[str, Any]],
+    papers: list[dict[str, Any]],
     citation_edges: list[dict[str, str]],
-    size: TrailSize = "medium",
-) -> dict[str, Any]:
-    constraints = SIZE_CONSTRAINTS[size]
+) -> list[dict[str, str]]:
+    """Suggest 0-5 conceptual prerequisite edges not captured by citation data.
+
+    Returns only new edges; invalid or duplicate pairs are dropped.
+    """
     client = _client()
     slim_papers = []
-    for p in verified_papers:
+    for p in papers:
         slim_papers.append(
             {
                 "openalex_id": p.get("openalex_id"),
                 "title": p.get("title"),
-                "authors": (p.get("authors") or [])[:3],  # first 3 authors max
+                "authors": (p.get("authors") or [])[:3],
                 "year": p.get("year"),
                 "citation_count": p.get("citation_count"),
-                # optional: very short abstract snippet
-                "summary": (p.get("abstract") or "")[:280],
+                "summary": (p.get("abstract") or "")[:500],
             }
         )
     payload = {
         "topic": topic,
         "papers": slim_papers,
         "citation_edges": citation_edges,
-        "constraints": {
-            "size": size,
-            "min_papers": constraints["min_papers"],
-            "max_papers": constraints["max_papers"],
-            "must_return_dag": True,
-        },
+        "instructions": (
+            "Suggest 0-5 additional prerequisite edges where one paper is genuinely needed "
+            "to understand another, but the relationship is NOT already implied by citation_edges. "
+            "Edges point from prerequisite to dependent. Use only openalex_id values from papers."
+        ),
     }
     completion = client.chat.completions.create(
         model=_model(),
@@ -169,52 +171,54 @@ def select_and_order_papers(
             {
                 "role": "system",
                 "content": (
-                    "You are constructing a reading trail of academic papers. "
-                    f"Select the best {constraints['min_papers']}-{constraints['max_papers']} papers that are most influential and relevant to the topic. "
-                    "Organize them as a DAG representing a logical learning progression. "
-                    "Edges point from prerequisite paper to dependent paper. "
-
-                    "Minimize branching and keep fan-out small (avoid a single paper leading to many children). "
-                    "Prefer deeper structures over wide ones. Aim for a trail depth of at least 3-5 levels when possible. "
-                    "All edge endpoints must appear in selected_papers. "
-
-                    "Occasionally include synthesis papers that combine 2+ prerequisite works. "
-                    "Avoid redundant transitive edges. "
-                    "ONLY one root node with no prerequisites. "
-                    "Use only paper IDs from the input and do not invent new ones. "
-                    "Return ONLY JSON with format "
-                    '{"selected_papers":["W..."],"edges":[{"from":"W...","to":"W..."}]}.'
-                )
+                    "You help build reading trails. Given papers and known citation-based edges, "
+                    "suggest only conceptual prerequisite edges missing from citation_edges. "
+                    'Return JSON: {"new_edges":[{"from":"W...","to":"W..."}]} with at most 5 edges.'
+                ),
             },
             {"role": "user", "content": json.dumps(payload)},
         ],
     )
     content = completion.choices[0].message.content or "{}"
 
-    # Best-effort local audit.
     _write_audit_entry(
-        "select_and_order_papers",
+        "enrich_edges_with_gpt",
         payload=payload,
         raw_response=content,
     )
 
     data = _parse_json_response(content)
+    raw = data.get("new_edges")
+    if not isinstance(raw, list):
+        return []
 
-    selected = data.get("selected_papers")
-    edges = data.get("edges")
-    if not isinstance(selected, list):
-        selected = []
-    if not isinstance(edges, list):
-        edges = []
+    allowed = {
+        str(p.get("openalex_id") or "").strip()
+        for p in papers
+        if str(p.get("openalex_id") or "").strip()
+    }
+    citation_pairs = {
+        (str(e.get("from") or "").strip(), str(e.get("to") or "").strip())
+        for e in citation_edges
+        if str(e.get("from") or "").strip() and str(e.get("to") or "").strip()
+    }
 
-    selected_ids = [str(x) for x in selected if str(x).strip()]
-    normalized_edges: list[dict[str, str]] = []
-    for edge in edges:
+    out: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for edge in raw:
         if not isinstance(edge, dict):
             continue
         from_id = str(edge.get("from") or "").strip()
         to_id = str(edge.get("to") or "").strip()
-        if from_id and to_id and from_id != to_id:
-            normalized_edges.append({"from": from_id, "to": to_id})
-
-    return {"selected_papers": selected_ids, "edges": normalized_edges}
+        if not from_id or not to_id or from_id == to_id:
+            continue
+        if from_id not in allowed or to_id not in allowed:
+            continue
+        pair = (from_id, to_id)
+        if pair in seen or pair in citation_pairs:
+            continue
+        seen.add(pair)
+        out.append({"from": from_id, "to": to_id})
+        if len(out) >= 5:
+            break
+    return out

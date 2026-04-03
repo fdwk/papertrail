@@ -31,7 +31,7 @@ from .services.trail_generator import (
     TrailGenerationError,
     apply_expansion,
     generate_expansion,
-    generate_trail,
+    generate_trail_async,
     generate_trail_stream,
 )
 
@@ -68,7 +68,7 @@ def list_trails_from_db(
 
 
 @router.post("/", response_model=TrailSummaryOut, status_code=status.HTTP_201_CREATED)
-def create_trail(
+async def create_trail(
     body: CreateTrailIn,
     user_id: Annotated[uuid.UUID, Depends(require_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -76,7 +76,7 @@ def create_trail(
     """Create a new trail via OpenAlex + GPT generation; fallback to random DB graph."""
     _enforce_trail_limit_for_user(db, user_id)
     try:
-        return generate_trail(db, user_id, body.topic, body.size)
+        return await generate_trail_async(db, user_id, body.topic, body.size)
     except TrailGenerationError as exc:
         logger.warning("Trail generation failed, using random fallback: %s", exc)
         return create_trail_with_random_graph_db(db, user_id, body.topic)

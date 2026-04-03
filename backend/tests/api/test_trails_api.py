@@ -20,7 +20,7 @@ def test_create_trail_uses_generator(monkeypatch) -> None:  # noqa: ANN001
     app.dependency_overrides[require_user] = lambda: uuid.uuid4()
     app.dependency_overrides[get_db] = _dummy_db
 
-    def fake_generate_trail(db, user_id, topic, size="medium"):  # noqa: ANN001, ANN202
+    async def fake_generate_trail_async(db, user_id, topic, size="medium"):  # noqa: ANN001, ANN202
         return TrailSummaryOut(
             id="trail-1",
             topic=topic,
@@ -29,7 +29,7 @@ def test_create_trail_uses_generator(monkeypatch) -> None:  # noqa: ANN001
             totalCount=5,
         )
 
-    monkeypatch.setattr(trails_module, "generate_trail", fake_generate_trail)
+    monkeypatch.setattr(trails_module, "generate_trail_async", fake_generate_trail_async)
     monkeypatch.setattr(
         trails_module, "_enforce_trail_limit_for_user", lambda _db, _user_id: None
     )
@@ -48,7 +48,7 @@ def test_create_trail_falls_back_to_random_when_generation_fails(monkeypatch) ->
     app.dependency_overrides[require_user] = lambda: uuid.uuid4()
     app.dependency_overrides[get_db] = _dummy_db
 
-    def fake_generate_trail(db, user_id, topic, size="medium"):  # noqa: ANN001, ANN202
+    async def fake_generate_trail_async(db, user_id, topic, size="medium"):  # noqa: ANN001, ANN202
         raise TrailGenerationError("boom")
 
     def fake_random(db, user_id, topic):  # noqa: ANN001, ANN202
@@ -60,7 +60,7 @@ def test_create_trail_falls_back_to_random_when_generation_fails(monkeypatch) ->
             totalCount=3,
         )
 
-    monkeypatch.setattr(trails_module, "generate_trail", fake_generate_trail)
+    monkeypatch.setattr(trails_module, "generate_trail_async", fake_generate_trail_async)
     monkeypatch.setattr(trails_module, "create_trail_with_random_graph_db", fake_random)
     monkeypatch.setattr(
         trails_module, "_enforce_trail_limit_for_user", lambda _db, _user_id: None

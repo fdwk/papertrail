@@ -49,19 +49,23 @@ def test_suggest_papers_raises_when_missing_papers_list(monkeypatch: pytest.Monk
         openai_client.suggest_papers("topic")
 
 
-def test_select_and_order_normalizes_output(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_enrich_edges_normalizes_and_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    papers = [
+        {"openalex_id": "W1", "title": "A", "authors": [], "year": 2017, "abstract": "x", "citation_count": 1},
+        {"openalex_id": "W2", "title": "B", "authors": [], "year": 2018, "abstract": "y", "citation_count": 2},
+    ]
+    citation_edges = [{"from": "W1", "to": "W2"}]
     payload = json.dumps(
         {
-            "selected_papers": ["W1", "  ", "W2"],
-            "edges": [
+            "new_edges": [
                 {"from": "W1", "to": "W2"},
                 {"from": "W2", "to": "W2"},
                 {"from": "", "to": "W1"},
-            ],
+                {"from": "W1", "to": "W999"},
+            ]
         }
     )
     monkeypatch.setattr(openai_client, "_client", lambda: _FakeClient(payload))
 
-    out = openai_client.select_and_order_papers("topic", [], [])
-    assert out["selected_papers"] == ["W1", "W2"]
-    assert out["edges"] == [{"from": "W1", "to": "W2"}]
+    out = openai_client.enrich_edges_with_gpt("topic", papers, citation_edges)
+    assert out == []
