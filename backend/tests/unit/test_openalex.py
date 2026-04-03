@@ -35,7 +35,7 @@ def test_search_by_title_returns_best_match(monkeypatch: pytest.MonkeyPatch) -> 
         assert path == "/works"
         assert params is not None
         # We ask OpenAlex for a small page size; exact value is part of the contract.
-        assert params["per_page"] == 5
+        assert params["per_page"] == openalex._TITLE_SEARCH_PER_PAGE
         return {
             "results": [
                 {
